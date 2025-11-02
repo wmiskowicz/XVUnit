@@ -1,0 +1,112 @@
+# Vivado temporary and build files
+*.jou
+*.log
+*.str
+*.str.lock
+*.wdb
+*.pb
+*.dmp
+*.protoinst
+*.xsim
+
+# Vivado project files
+*.cache/
+*.hw/
+*.hw_ila/
+*.hw_sio/
+*.runs/
+*.sim/
+*.gen/
+*.ip_user_files/
+*.webtalk/
+*.dswkshop/
+*.xpr
+*.xpr.lock
+
+# Temporary build and output files
+*.backup.*
+*.tmp
+*.temp
+*.bxml
+*.log.bak
+*.bak
+*.synlog
+*.xml.log
+*.xpa
+
+# SystemVerilog and simulation artifacts
+*.vcd
+*.wlf
+*.svf
+*.log
+*.key
+*.ucf
+*.rpt
+*.mem
+*.cmd.log
+*.vstf
+*.fdb
+*.db
+*.ucdb
+*.shm
+
+# Compiled output files (QuestaSim, ModelSim, etc.)
+work/
+work_lib/
+*.wlf
+*.vstf
+*.vcd
+transcript
+vsim.wlf
+*.mti
+*.vst
+
+# IP and generated files
+.ip_user_files/
+.xci
+.xdci
+.xco
+.xtcl
+.fpo
+.lut
+*.ncf
+*.sdf
+*.pkl
+*.init
+*.gise
+
+# Custom scripts and log files
+*.sh~
+*.pyc
+*.pyo
+__pycache__/
+*.tcl.bak
+*.tcl.log
+*.backup
+
+# Operating system specific files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+*.swp
+*.swo
+
+# DVT specific files
+*_dict*
+*build.config*
+*auto*
+default.ls
+
+# Project specific
+.env
+results
+images
+*build*
+*.vscode
+*.png
+*.jpg
+*vunit_out*
+*.cxl*
+.settings/
+.project
+.library_*
