@@ -39,13 +39,14 @@ class XVUnitRunner:
     
     def generate_runner_cfg(self, test_names):
         """
-        Generate the runner configuration string that matches what your SV code expects
+        Generate the runner configuration string that matches what your SV code expects.
+        & is used as a denominator between test case names and output path
         """
         enabled_tests = ",".join(test_names) if test_names else "__all__"
         output_path = f"{self.build_dir}/".replace('\\', '//')
         
         # This format MUST match what your SV parser expects
-        return f"enabled_test_cases:{enabled_tests},output_path:{output_path}"
+        return f"enabled_test_cases:{enabled_tests},&output_path:{output_path}"
     
     def run_test(self, testbench_file, test_names=None):
         """Run a single testbench with the XVUnit framework"""
@@ -159,5 +160,5 @@ if __name__ == "__main__":
     testbench_path = os.path.join(PROJECT_DIR, "sim", "xvunit_test", "xvunit_test_tb.sv")
     print(f"path = {testbench_path}")
     
-    success = runner.run_test(testbench_path, test_names=["TC000"])
+    success = runner.run_test(testbench_path, test_names=["TC000","TC001"])
     print(f"Test {'PASSED' if success else 'FAILED'}")

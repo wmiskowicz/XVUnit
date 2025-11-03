@@ -83,16 +83,15 @@ class test_runner;
       end
 
       for (int i=index; i<runner_cfg.len(); i++) begin
+         if (runner_cfg[i] == "&") begin
+            break;
+         end
          if (i == runner_cfg.len()-1) begin
             test_cases_to_run.push_back(runner_cfg.substr(index, i));
          end
          else if (runner_cfg[i] == ",") begin
             test_cases_to_run.push_back(runner_cfg.substr(index, i-1));
-            index = i+2;
-            i++;
-            if (runner_cfg[i] != ",") begin
-               break;
-            end
+            index = i+1;
          end
       end
 
