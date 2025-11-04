@@ -78,25 +78,6 @@ class XVUnitRunner:
         print("Running simulation...")
 
         result = subprocess.run(run_cmd, shell=True, cwd=self.build_dir, capture_output=True, text=True)
-        print(result.stdout)
-        
-        # Check results
-        log_file = os.path.join(self.build_dir, "xsim.log")
-        if os.path.exists(log_file):
-            with open(log_file, 'r') as f:
-                log_content = f.read()
-                print("Simulation output:")
-                print(log_content)
         
         return result.returncode == 0
-    
-    def find_project_file(self, testbench_file):
-        """Find or generate the project file for the testbench"""
-        testbench_dir = os.path.dirname(testbench_file)
-        testbench_name = Path(testbench_file).stem
-        project_file = os.path.join(testbench_dir, f"{testbench_name}.prj")
-        
-        if os.path.exists(project_file):
-            return project_file
-
 
