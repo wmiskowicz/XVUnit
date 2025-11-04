@@ -134,21 +134,7 @@ class XVUnitRunner:
             return project_file
         # else:
             # return self.generate_minimal_project_file(testbench_file)
-    
-    def generate_minimal_project_file(self, testbench_file):
-        """Generate a minimal project file for the testbench"""
-        project_file = os.path.join(self.project_dir, "sim", "xvunit_test", "xvunit_test.prj")
-        
-        # Get all necessary files
-        xvunit_pkg = os.path.join(self.project_dir, "XVunit", "internals", "verilog", "xvunit_pkg.sv")
-        xvunit_macros = os.path.join(self.project_dir, "XVunit", "internals", "verilog", "xvunit_defines.svh")
-        
-        with open(project_file, 'w') as f:
-            f.write(f'verilog work "{xvunit_pkg}"\n')
-            f.write(f'verilog work "{xvunit_macros}"\n')
-            f.write(f'verilog work "{testbench_file}"\n')
-        
-        return project_file
+
 
 # Simple test
 from pathlib import Path
@@ -162,3 +148,38 @@ if __name__ == "__main__":
     
     success = runner.run_test(testbench_path, test_names=["TC000","TC001"])
     print(f"Test {'PASSED' if success else 'FAILED'}")
+    
+    
+    
+#     # Command-line interface (preserving your original argument structure)
+# def main():
+#     parser = argparse.ArgumentParser(description="Run Vivado simulations outside Vivado for faster execution.")
+#     parser.add_argument("-l", action="store_true", help="List available tests")
+#     parser.add_argument("-t", type=str, help="Run the specified test")
+#     parser.add_argument("-g", action="store_true", help="Show GUI (use with -t)")
+#     parser.add_argument("-a", action="store_true", help="Run all available tests")
+#     parser.add_argument("-prj", action="store_true", help="Update .prj file of run test. (use with -t)")
+    
+#     args = parser.parse_args()
+    
+#     # Create runner instance
+#     runner = VivadoTestRunner(PROJECT_DIR, VIVADO_SETUP)
+    
+#     if args.l:
+#         runner.list_available_tests()
+#     elif args.a:
+#         results = runner.run_all_tests(show_gui=False, update_prj=args.prj)
+#         runner.print_summary(results)
+#     elif args.t:
+#         test_case = TestCase(args.t, runner.sim_dir)
+#         if test_case.exists():
+#             runner.execute_test(test_case, show_gui=args.g, update_prj=args.prj)
+#         else:
+#             print(f"Test not found: {args.t}")
+#             sys.exit(1)
+#     else:
+#         parser.print_help()
+#         sys.exit(1)
+
+# if __name__ == "__main__":
+#     main()

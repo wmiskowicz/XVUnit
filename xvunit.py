@@ -11,7 +11,7 @@ from pathlib import Path
 
 import os
 from pathlib import Path
-from internals.python.test_bench import Testbench
+from internals.python.test_bench import Testbench, TestCase
 from internals.python.xvunit_runner import XVUnitRunner
 
 
@@ -27,22 +27,43 @@ class XVunit():
             for tc in tb.get_test_cases():
                 print(f'{tb.name}.{tc.name}')
                 
-    def run_testbench(self, testbench_name, test_name):
+    def run_testbench(self, testbench_name : str, tests_to_run : list):
+        matched_testbench = self.match_testbench(testbench_name, tests_to_run)
+
+        self.runner.run_test(matched_testbench.file_path, matched_testbench.get_test_cases().keys())
+        self.process_test_results(matched_testbench)
+                
+    def process_test_results(self, testbench : Testbench):
+        
+        self.__create_tc_folders(testbench.name)
+        self.__create_tc_log_files(testbench) 
+        self.__fill_all_tests_results(testbench)
+        
+    def __fill_all_tests_results(self, testbench : Testbench):        
+        for tc in testbench.get_test_cases():
+            self.__fill_test_results(tc)
+            
+            
+    def __fill_test_results(self, tc : TestCase):
+        print(tc)
+        sys.exit()
+        # tc.passed = not ('ERROR' in tc.log_file)
+        
+    def match_testbench(self, testbench_name : str, tc_to_run : list) -> Testbench:        
         for tb in self.tb_list:
             if tb.name == testbench_name:
-                tb_to_run = tb
-                
-        self.runner.run_test(tb.file_path, ["TC001"])
-                
-    def process_test_results(self, testbench_name : str):
-        self.__create_tc_folders(testbench_name)
-        self.__create_tc_log_files(testbench_name) 
-        # self.__fill_test_results
+                matched_tb = tb
         
+        tests_to_run_set = set(tc_to_run)
+        matched_test_cases = [
+            tc_val for tc_key, tc_val in matched_tb.get_test_cases().items()
+            if tc_key in tests_to_run_set
+        ]
         
+        matched_tb.set_test_cases(matched_test_cases)
         
-        
-        
+        return matched_tb
+
         
         
     def __set_paths(self):
@@ -53,7 +74,7 @@ class XVunit():
         self.build_dir = os.path.join(self.sim_dir, "build")
         self.xsim_log = os.path.join(self.build_dir, "xsim.log")
         
-    def __create_tc_folders(self, testbench_name) -> None:
+    def __create_tc_folders(self, testbench_name):
         """Create folders for each test case found in vunit_results file."""
         test_cases = []
         
@@ -69,16 +90,14 @@ class XVunit():
                         
         except FileNotFoundError:
             print(f"Warning: VUnit results file not found: {self.xsim_log}")
-            return []
         
         # Create folders for each test case
         for test_name in test_cases:
             test_dir = os.path.join(self.build_dir, testbench_name, test_name)
             os.makedirs(test_dir, exist_ok=True)
         
-        return test_cases
     
-    def __create_tc_log_files(self, testbench_name):
+    def __create_tc_log_files(self, testbench : Testbench):
         """Create <tc_name>.log files - everything after test_start: goes to that log until next test_start:"""
         
         if not os.path.exists(self.xsim_log):
@@ -89,6 +108,7 @@ class XVunit():
             full_log = f.read()
         
         test_logs = {}
+        test_cases = testbench.get_test_cases()
         current_test = None
         current_log = []
         
@@ -114,7 +134,7 @@ class XVunit():
         
         # Create log files
         for test_name, log_content in test_logs.items():
-            test_dir = os.path.join(self.build_dir, testbench_name, test_name)
+            test_dir = os.path.join(self.build_dir, testbench.name, test_name)
             os.makedirs(test_dir, exist_ok=True)
             
             log_file_path = os.path.join(test_dir, f"{test_name}.log")
@@ -152,4 +172,4 @@ class XVunit():
         
 
 xvunit = XVunit()
-xvunit.process_test_results('xvunit_test')
+xvunit.run_testbench('xvunit_test', ["TC0003", "TC001"])
