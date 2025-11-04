@@ -2,11 +2,14 @@ import os
 import re
 import sys
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Dict, List
+
+from paths import BUILD_DIR
 
 @dataclass
 class TestCase:
     name: str
+    selected_to_run : bool = False
     passed: bool = False
     ready: bool = False
     simulation_time: float = 0
@@ -19,10 +22,10 @@ class Testbench:
     def __init__(self, name: str, file_path : str):
         self.name = name
         self.file_path = file_path
-        self.test_cases = self.get_test_cases()
+        self.test_cases_dict = self.get_test_cases_dict()
         
     
-    def get_test_cases(self) -> dict:
+    def get_test_cases_dict(self) -> Dict[str, TestCase]:
         """Extract all test case names from TEST_CASE macros in a testbench."""
         test_cases = {}
         
@@ -36,7 +39,12 @@ class Testbench:
                     matches = re.findall(pattern, content)
                     
                     for test_name in matches:
-                        test_cases[test_name] = TestCase(test_name)
+                        
+                        if test_name in test_cases:
+                            raise Exception(f'Found testbench duplicates in {self.name}: {test_name}')
+                        else:
+                            tc_log_path = os.path.join(BUILD_DIR, self.name, test_name, f"{test_name}.log")
+                            test_cases[test_name] = TestCase(test_name, log_path=tc_log_path)
 
 
             except (UnicodeDecodeError, IOError) as e:
@@ -45,11 +53,17 @@ class Testbench:
         return test_cases  
     
     
-    def set_test_cases(self, test_case_list : list):
-        new_tc_list = []
-        for test_name in test_case_list:
-            new_tc_list.append(TestCase(test_name))
-            
-        self.test_cases = new_tc_list
-            
-    
+    def select_test_cases_to_run(self, test_case_name_list : List[str]):
+        
+        for test_name in test_case_name_list:
+            if test_name in self.test_cases_dict:
+                self.test_cases_dict[test_name].selected_to_run = True
+                
+    def get_selected_test_cases_names(self) -> list:
+        selected_tc = []
+        
+        for tc_name, tc_class in self.test_cases_dict.items():
+            if tc_class.selected_to_run:
+                selected_tc.append(tc_name)
+        
+        return selected_tc

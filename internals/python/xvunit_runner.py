@@ -1,6 +1,7 @@
 import os, sys
 import subprocess
 from pathlib import Path
+from typing import Optional, Dict, List
 
 sys.path.append(os.path.dirname(__file__))
 from paths import *
@@ -23,7 +24,7 @@ class XVUnitRunner:
         # This format MUST match what your SV parser expects
         return f"enabled_test_cases:{enabled_tests},&output_path:{output_path}"
     
-    def run_test(self, testbench_file, test_names=None):
+    def run_test(self, testbench_file, test_names : list=None):
         """Run a single testbench with the XVUnit framework"""
         
         if not os.path.exists(self.build_dir):
@@ -38,7 +39,7 @@ class XVUnitRunner:
         module_name = Path(testbench_file).stem
         
         # COMPILE: Use normal compilation without generic
-        prj_path = r"C:\Users\wojte\Documents\Saper_new\sim\xvunit_test\xvunit_test.prj"
+        prj_path = os.path.join(SIM_DIR, module_name[:-3], f'{module_name[:-3]}.prj')
         compile_cmd = (
             f'{self.setup_cmd} xvlog --incr --relax --sv '
             f'-i {os.path.join(self.project_dir, "XVunit/internals/verilog")} '
@@ -67,7 +68,7 @@ class XVUnitRunner:
         if result.returncode != 0:
             print(f"Compilation failed: {result.stderr}")
             print(f"STDOUT: {result.stdout}")
-            return False
+            return False        
         
         print("Elaborating...")
         result = subprocess.run(elaborate_cmd, shell=True, cwd=self.build_dir, capture_output=True, text=True)
@@ -80,4 +81,5 @@ class XVUnitRunner:
         result = subprocess.run(run_cmd, shell=True, cwd=self.build_dir, capture_output=True, text=True)
         
         return result.returncode == 0
+
 
