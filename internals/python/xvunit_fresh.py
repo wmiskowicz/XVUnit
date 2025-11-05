@@ -34,6 +34,7 @@ class XVunit_FRESH:
     def run_testbench(self, testbench_name: str, tests_to_run: List[str]):
         self.parser.set_current_testbench_name(testbench_name)
         matched_testbench = self.match_testbench(testbench_name, tests_to_run)
+        print(matched_testbench.file_path)
         
         self._stop_refresh_thread.clear()
         self.refresh_thread = threading.Thread(target=self._refresh_worker)
@@ -48,8 +49,9 @@ class XVunit_FRESH:
         
     def _refresh_worker(self):
         while not self._stop_refresh_thread.is_set():
-            self.parser.check_log()
-            time.sleep(0.5)
+            if self.runner.is_simulation_running() and not self.parser.is_parsing_done():
+                self.parser.check_log()
+                time.sleep(0.5)
         
         
         
@@ -76,4 +78,4 @@ class XVunit_FRESH:
     
 
 xvunit = XVunit_FRESH()
-xvunit.run_testbench('new_test', ["TC003", "TC005"])
+xvunit.run_testbench('xvunit_test', ["TC003", "TC005"])

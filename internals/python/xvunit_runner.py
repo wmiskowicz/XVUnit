@@ -1,5 +1,6 @@
 import os, sys
 import subprocess
+import threading 
 from pathlib import Path
 from typing import Optional, Dict, List
 
@@ -12,8 +13,131 @@ class XVUnitRunner:
         self.sim_dir    = SIM_DIR
         self.build_dir  = BUILD_DIR
         self.setup_cmd  = f'call "{VIVADO_SETUP}" && '
+        
+        self.sim_running = threading.Event()
+        
+        
+    def is_simulation_running(self):
+        """Check if simulation is currently running."""
+        return self.sim_running.is_set()
+
     
-    def generate_runner_cfg(self, test_names : list) -> str:
+    def run_test(self, testbench_file, test_names : list, force_recompile : bool = False):
+        """Run a single testbench with the XVUnit framework"""
+        
+       
+        self.sim_running.clear()
+        module_name = Path(testbench_file).stem
+        prj_path = os.path.join(SIM_DIR, module_name[:-3], f'{module_name[:-3]}.prj')
+
+
+        if not Path.is_dir(Path(self.build_dir)):
+            os.makedirs(self.build_dir, exist_ok=True)
+        
+        
+        if force_recompile or self.__needs_recompile(prj_path, module_name):
+            print("Compiling...")
+            self.__compile(prj_path, module_name)
+
+        if force_recompile or self.__needs_reelaboration():
+            print("Elaborating...")
+            self.__elaborate(module_name)
+
+        if test_names == []:
+            print(f"No tests were run")
+        else:
+            print("Running simulation...")
+            
+        # note - when passing [] this will execute with __all__ parameter
+        self.__simulate(module_name, self.__generate_runner_cfg(test_names))
+
+        
+    
+    def __compile(self, prj_path, module_name):
+        
+        compile_cmd = (
+            f'{self.setup_cmd} xvlog --incr --relax --sv '
+            f'-i {os.path.join(self.project_dir, "XVunit/internals/verilog")} '
+            f'-prj {prj_path} '
+            # f'work.{module_name} '
+            f'-L uvm -L unisims_ver'
+        )
+        
+        result = subprocess.run(compile_cmd, shell=True, cwd=self.build_dir, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Compilation failed: {result.stderr}")
+            print(f"STDOUT: {result.stdout}")
+        
+    def __elaborate(self, module_name : str):
+        
+        elaborate_cmd = (
+            f'{self.setup_cmd} xelab --incr --relax --debug typical '
+            f'work.{module_name} '
+            f'-L uvm -L unisims_ver'
+        )
+        
+        result = subprocess.run(elaborate_cmd, shell=True, cwd=self.build_dir, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Elaboration failed: {result.stdout}")
+        
+        
+    def __simulate(self, module_name : str, runner_cfg):
+        run_cmd = (
+            f'{self.setup_cmd} xsim work.{module_name} '
+            f'-testplusarg "runner_cfg={runner_cfg}" --runall'
+        )
+        print(run_cmd)
+        try:
+            self.sim_running.set()
+            subprocess.run(run_cmd, shell=True, cwd=self.build_dir, capture_output=True, text=True)
+        finally:
+            self.sim_running.clear()
+    
+    def __needs_recompile(self, prj_path, module_name):
+        """Check if recompilation is needed based on file timestamps."""
+        
+        xvlog_log = os.path.join(self.build_dir, "xvlog.log")
+        if not os.path.exists(xvlog_log):
+            print("xvlog.log doesn't exist - recompiling")
+            return True
+        
+        module_work_dir = os.path.join(self.build_dir, "xsim.dir", f'work.{module_name}')
+        if not os.path.exists(module_work_dir):
+            print(f"work.{module_name} doesn't exist - recompiling")
+            return True    
+        
+        compile_log_age = os.path.getmtime(xvlog_log)
+        
+        # Check if .prj is newer than compilation
+        if os.path.exists(prj_path) and os.path.getmtime(prj_path) > compile_log_age:
+            return True
+        
+        return False
+        
+    def __needs_reelaboration(self):
+        """Check if re-elaboration is needed."""
+        # Check if xelab.log exists (indicates elaboration happened)
+        xelab_log = os.path.join(self.build_dir, "xelab.log")
+        if not os.path.exists(xelab_log):
+            print("xelab.log doesn't exist - need to elaborate")
+            return True
+        
+        # Get elaboration time from xelab.log
+        elab_time = os.path.getmtime(xelab_log)
+        
+        # Check if compilation is newer than elaboration
+        xvlog_log = os.path.join(self.build_dir, "xvlog.log")
+        if os.path.exists(xvlog_log):
+            compile_log_age = os.path.getmtime(xvlog_log)
+            if compile_log_age > elab_time:
+                print("Compilation is newer than elaboration - need to re-elaborate")
+                return True
+        
+        print("No re-elaboration needed - using cached elaboration")
+        return False
+    
+    
+    def __generate_runner_cfg(self, test_names : list) -> str:
         """
         Generate the runner configuration string.
         & is used as a denominator between test case names and output path
@@ -23,63 +147,3 @@ class XVUnitRunner:
         
         # This format MUST match what your SV parser expects
         return f"enabled_test_cases:{enabled_tests},&output_path:{output_path}"
-    
-    def run_test(self, testbench_file, test_names : list=None):
-        """Run a single testbench with the XVUnit framework"""
-        
-        if not os.path.exists(self.build_dir):
-            os.makedirs(self.build_dir, exist_ok=True)
-        
-        subprocess.run(["git", "clean", "-fXd", "."], cwd=self.sim_dir)
-        
-        # Generate runner configuration
-        runner_cfg = self.generate_runner_cfg(test_names)
-        
-        # Get the module name from the testbench file
-        module_name = Path(testbench_file).stem
-        
-        # COMPILE: Use normal compilation without generic
-        prj_path = os.path.join(SIM_DIR, module_name[:-3], f'{module_name[:-3]}.prj')
-        compile_cmd = (
-            f'{self.setup_cmd} xvlog --incr --relax --sv '
-            f'-i {os.path.join(self.project_dir, "XVunit/internals/verilog")} '
-            f'-prj {prj_path} '
-            f'-L uvm -L unisims_ver'
-        )
-        
-        # ELABORATE: No changes here
-        elaborate_cmd = (
-            f'{self.setup_cmd} xelab --incr --relax --debug typical '
-            f'work.{module_name} '
-            f'-L uvm -L unisims_ver'
-        )
-        
-        # RUN: Pass runner_cfg as plusarg
-        run_cmd = (
-            f'{self.setup_cmd} xsim work.{module_name} '
-            f'-testplusarg "runner_cfg={runner_cfg}" --runall'
-        )
-        if not Path.is_dir(Path(self.build_dir)):
-            os.makedirs(self.build_dir, exist_ok=True)
-        
-        print("Compiling...")
-        
-        result = subprocess.run(compile_cmd, shell=True, cwd=self.build_dir, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"Compilation failed: {result.stderr}")
-            print(f"STDOUT: {result.stdout}")
-            return False        
-        
-        print("Elaborating...")
-        result = subprocess.run(elaborate_cmd, shell=True, cwd=self.build_dir, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"Elaboration failed: {result.stdout}")
-            return False
-        
-        print("Running simulation...")
-
-        result = subprocess.run(run_cmd, shell=True, cwd=self.build_dir, capture_output=True, text=True)
-        
-        return result.returncode == 0
-
-

@@ -17,9 +17,11 @@ class Parser:
                 
         colorama.init(autoreset=True)
         self.current_testbench_name = None
+        self.finished_parsing = False
     
     def set_current_testbench_name(self, testbench_name : str):
         self.current_testbench_name = testbench_name
+        self.finished_parsing = False
 
     def check_log(self, last_file_position: int = 0) -> Dict[str, str]:
         """Monitor log file for changes and create/update <tc_name>.log files in real-time.
@@ -72,7 +74,9 @@ class Parser:
                     # Finalize current test and break
                     if current_test and current_log:
                         self._write_test_log(current_test, '\n'.join(current_log))
+                    self.finished_parsing = True
                     print("Test suite completed")
+                    
                     break
                     
                 elif current_test:
@@ -82,6 +86,9 @@ class Parser:
         except Exception as e:
             print(f"Error reading log file: {e}")
         
+    
+    def is_parsing_done(self) -> bool:
+        return self.finished_parsing
 
     def _write_test_log(self, test_name: str, log_content: str):
         """Write individual test log to file"""
