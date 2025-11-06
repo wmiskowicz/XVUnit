@@ -1,20 +1,19 @@
 import threading
 import time
-import sys
+import os, sys
 import colorama
 from typing import List
 from typing import Dict, Optional
 
-import os
-from pathlib import Path
-from paths import *
+sys.path.append(os.path.dirname(__file__))
 
+from paths import *
 from test_bench import Testbench, TestCase
 from xvunit_runner import XVUnitRunner
 from parser import Parser
 
 
-class XVunit_FRESH:
+class XVunit:
   
     def __init__(self):
     
@@ -50,8 +49,9 @@ class XVunit_FRESH:
     def _refresh_worker(self):
         while not self._stop_refresh_thread.is_set():
             if self.runner.is_simulation_running() and not self.parser.is_parsing_done():
+                time.sleep(2) # wait for log to clear
                 self.parser.check_log()
-                time.sleep(0.5)
+            time.sleep(0.5)
         
         
         
@@ -77,6 +77,7 @@ class XVunit_FRESH:
                 print(f'{tb_name}.{tc_name}')
     
 
-xvunit = XVunit_FRESH()
-# xvunit.run_testbench('xvunit_test', ["TC001"])
-xvunit.run_testbench('new_test', ["TC003"])
+# For testing purposes
+xvunit = XVunit()
+xvunit.run_testbench('xvunit_test', ["TC001"])
+# xvunit.run_testbench('new_test', ["TC005"])

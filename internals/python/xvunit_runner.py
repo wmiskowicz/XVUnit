@@ -89,6 +89,7 @@ class XVUnitRunner:
             f'{self.setup_cmd} xsim work.{module_name} '
             f'-testplusarg "runner_cfg={runner_cfg}" --runall'
         )
+        
         try:
             self.sim_running.set()
             result = subprocess.run(run_cmd, shell=True, cwd=self.testbench_build_dir, capture_output=True, text=True)
@@ -99,9 +100,12 @@ class XVUnitRunner:
         """Check if recompilation is needed based on file timestamps."""
         source_files = self.parser.parse_prj(prj_path)
         xvlog_log = os.path.join(self.testbench_build_dir, "xvlog.log")
+        
+        if not os.path.exists(xvlog_log):
+            print("xvlog.log doesn't exist - recompiling")
+            return True
+        
         compile_time = os.path.getmtime(xvlog_log)
-        
-        
         for source_file in source_files:
             if os.path.exists(source_file):
                 source_time = os.path.getmtime(source_file)
@@ -109,10 +113,6 @@ class XVUnitRunner:
                     print(f"Recompiling")
                     return True
         
-        
-        if not os.path.exists(xvlog_log):
-            print("xvlog.log doesn't exist - recompiling")
-            return True
         
         module_work_dir = os.path.join(self.testbench_build_dir, "xsim.dir", f'work.{module_name}')
         if not os.path.exists(module_work_dir):
