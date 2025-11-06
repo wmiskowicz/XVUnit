@@ -78,4 +78,5 @@ class XVunit_FRESH:
     
 
 xvunit = XVunit_FRESH()
-xvunit.run_testbench('xvunit_test', ["TC003", "TC005"])
+# xvunit.run_testbench('xvunit_test', ["TC001"])
+xvunit.run_testbench('new_test', ["TC003"])

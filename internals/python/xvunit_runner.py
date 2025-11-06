@@ -1,17 +1,20 @@
 import os, sys
 import subprocess
 import threading 
+import time
 from pathlib import Path
 from typing import Optional, Dict, List
 
 sys.path.append(os.path.dirname(__file__))
 from paths import *
+from parser import Parser
 
 class XVUnitRunner:
     def __init__(self):
+        self.parser = Parser()
         self.project_dir = PROJECT_DIR
         self.sim_dir    = SIM_DIR
-        self.build_dir  = BUILD_DIR
+        self.testbench_build_dir = None
         self.setup_cmd  = f'call "{VIVADO_SETUP}" && '
         
         self.sim_running = threading.Event()
@@ -29,15 +32,16 @@ class XVUnitRunner:
         self.sim_running.clear()
         module_name = Path(testbench_file).stem
         prj_path = os.path.join(SIM_DIR, module_name[:-3], f'{module_name[:-3]}.prj')
+        self.testbench_build_dir = os.path.join(BUILD_DIR, module_name[:-3])
 
 
-        if not Path.is_dir(Path(self.build_dir)):
-            os.makedirs(self.build_dir, exist_ok=True)
+        self.__makedir(BUILD_DIR)
+        self.__makedir(self.testbench_build_dir)
         
         
         if force_recompile or self.__needs_recompile(prj_path, module_name):
             print("Compiling...")
-            self.__compile(prj_path, module_name)
+            self.__compile(prj_path)
 
         if force_recompile or self.__needs_reelaboration():
             print("Elaborating...")
@@ -53,17 +57,16 @@ class XVUnitRunner:
 
         
     
-    def __compile(self, prj_path, module_name):
+    def __compile(self, prj_path):
         
         compile_cmd = (
             f'{self.setup_cmd} xvlog --incr --relax --sv '
             f'-i {os.path.join(self.project_dir, "XVunit/internals/verilog")} '
             f'-prj {prj_path} '
-            # f'work.{module_name} '
             f'-L uvm -L unisims_ver'
         )
         
-        result = subprocess.run(compile_cmd, shell=True, cwd=self.build_dir, capture_output=True, text=True)
+        result = subprocess.run(compile_cmd, shell=True, cwd=self.testbench_build_dir, capture_output=True, text=True)
         if result.returncode != 0:
             print(f"Compilation failed: {result.stderr}")
             print(f"STDOUT: {result.stdout}")
@@ -76,7 +79,7 @@ class XVUnitRunner:
             f'-L uvm -L unisims_ver'
         )
         
-        result = subprocess.run(elaborate_cmd, shell=True, cwd=self.build_dir, capture_output=True, text=True)
+        result = subprocess.run(elaborate_cmd, shell=True, cwd=self.testbench_build_dir, capture_output=True, text=True)
         if result.returncode != 0:
             print(f"Elaboration failed: {result.stdout}")
         
@@ -86,22 +89,32 @@ class XVUnitRunner:
             f'{self.setup_cmd} xsim work.{module_name} '
             f'-testplusarg "runner_cfg={runner_cfg}" --runall'
         )
-        print(run_cmd)
         try:
             self.sim_running.set()
-            subprocess.run(run_cmd, shell=True, cwd=self.build_dir, capture_output=True, text=True)
+            result = subprocess.run(run_cmd, shell=True, cwd=self.testbench_build_dir, capture_output=True, text=True)
         finally:
             self.sim_running.clear()
     
     def __needs_recompile(self, prj_path, module_name):
         """Check if recompilation is needed based on file timestamps."""
+        source_files = self.parser.parse_prj(prj_path)
+        xvlog_log = os.path.join(self.testbench_build_dir, "xvlog.log")
+        compile_time = os.path.getmtime(xvlog_log)
         
-        xvlog_log = os.path.join(self.build_dir, "xvlog.log")
+        
+        for source_file in source_files:
+            if os.path.exists(source_file):
+                source_time = os.path.getmtime(source_file)
+                if source_time > compile_time:
+                    print(f"Recompiling")
+                    return True
+        
+        
         if not os.path.exists(xvlog_log):
             print("xvlog.log doesn't exist - recompiling")
             return True
         
-        module_work_dir = os.path.join(self.build_dir, "xsim.dir", f'work.{module_name}')
+        module_work_dir = os.path.join(self.testbench_build_dir, "xsim.dir", f'work.{module_name}')
         if not os.path.exists(module_work_dir):
             print(f"work.{module_name} doesn't exist - recompiling")
             return True    
@@ -114,10 +127,11 @@ class XVUnitRunner:
         
         return False
         
+        
     def __needs_reelaboration(self):
         """Check if re-elaboration is needed."""
         # Check if xelab.log exists (indicates elaboration happened)
-        xelab_log = os.path.join(self.build_dir, "xelab.log")
+        xelab_log = os.path.join(self.testbench_build_dir, "xelab.log")
         if not os.path.exists(xelab_log):
             print("xelab.log doesn't exist - need to elaborate")
             return True
@@ -126,7 +140,7 @@ class XVUnitRunner:
         elab_time = os.path.getmtime(xelab_log)
         
         # Check if compilation is newer than elaboration
-        xvlog_log = os.path.join(self.build_dir, "xvlog.log")
+        xvlog_log = os.path.join(self.testbench_build_dir, "xvlog.log")
         if os.path.exists(xvlog_log):
             compile_log_age = os.path.getmtime(xvlog_log)
             if compile_log_age > elab_time:
@@ -143,7 +157,12 @@ class XVUnitRunner:
         & is used as a denominator between test case names and output path
         """
         enabled_tests = ",".join(test_names) if test_names else "__all__"
-        output_path = f"{self.build_dir}/".replace('\\', '//')
+        output_path = f"{self.testbench_build_dir}/".replace('\\', '//')
         
         # This format MUST match what your SV parser expects
         return f"enabled_test_cases:{enabled_tests},&output_path:{output_path}"
+    
+    
+    def __makedir(self, path):
+        if not Path.is_dir(Path(path)):
+            os.makedirs(path, exist_ok=True)

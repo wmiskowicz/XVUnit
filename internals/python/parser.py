@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 from paths import *
 from test_bench import Testbench, TestCase
-from xvunit_runner import XVUnitRunner
 
 
 class Parser:
@@ -18,9 +17,11 @@ class Parser:
         colorama.init(autoreset=True)
         self.current_testbench_name = None
         self.finished_parsing = False
+        self.testbench_build_dir = None
     
     def set_current_testbench_name(self, testbench_name : str):
         self.current_testbench_name = testbench_name
+        self.testbench_build_dir = os.path.join(BUILD_DIR, testbench_name)
         self.finished_parsing = False
 
     def check_log(self, last_file_position: int = 0) -> Dict[str, str]:
@@ -33,16 +34,16 @@ class Parser:
             Dictionary with test names as keys and log contents as values
             Also returns the new file position for next call
         """
-        
-        if not os.path.exists(XSIM_LOG):
-            print(f"Warning: path:{XSIM_LOG} ]'not found")
+        xsim_log = os.path.join(BUILD_DIR, self.current_testbench_name, "xsim.log")
+        if not os.path.exists(xsim_log):
+            print(f"Warning: path:{xsim_log} ]'not found")
             return 
         
         current_test: Optional[str] = None
         current_log = []
         
         try:
-            with open(XSIM_LOG, 'r') as f:
+            with open(xsim_log, 'r') as f:
                 # Seek to the last read position
                 f.seek(last_file_position)
                 
@@ -92,7 +93,7 @@ class Parser:
 
     def _write_test_log(self, test_name: str, log_content: str):
         """Write individual test log to file"""
-        test_dir = os.path.join(BUILD_DIR, self.current_testbench_name, test_name)
+        test_dir = os.path.join(self.testbench_build_dir, self.current_testbench_name, test_name)
         os.makedirs(test_dir, exist_ok=True)
         
         log_file_path = os.path.join(test_dir, f"{test_name}.log")
@@ -136,4 +137,35 @@ class Parser:
                         continue
                         
         return testbench_dict
+    
+    def parse_prj(self, prj_path) -> list:
+        """Parse project file and return list of file paths."""
+        file_paths = []
+        
+        try:
+            with open(prj_path, 'r') as f:
+                for line in f:
+                    line = line.replace(' \\', "").strip()
+                    
+                    # Skip empty lines and comments
+                    if not line or line.startswith('#'):
+                        continue
+                    
+                    if line.startswith('sv work '):
+                        line = line.replace("sv work ", "").strip()
+                    elif line.startswith('verilog work'):
+                        line = line.replace("verilog work", "").strip()
+                    elif line.startswith('vhdl work'):
+                        line = line.replace("vhdl work", "").strip()
+                                            
+                    if os.path.exists(line):
+                        file_paths.append(line)
+                        
+        
+        except FileNotFoundError:
+            print(f"Error: Project file not found: {prj_path}")
+        except Exception as e:
+            print(f"Error parsing project file: {e}")
+                    
+        return file_paths
     
