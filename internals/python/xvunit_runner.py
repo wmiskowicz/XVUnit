@@ -2,6 +2,7 @@ import os, sys
 import subprocess
 import threading 
 import time
+import colorama
 from pathlib import Path
 from typing import Optional, Dict, List
 
@@ -18,6 +19,7 @@ class XVUnitRunner:
         self.setup_cmd  = f'call "{VIVADO_SETUP}" && '
         
         self.sim_running = threading.Event()
+        colorama.init(autoreset=True)
         
         
     def is_simulation_running(self):
@@ -25,7 +27,7 @@ class XVUnitRunner:
         return self.sim_running.is_set()
 
     
-    def run_test(self, testbench_file, test_names : list, force_recompile : bool = False):
+    def run_test(self, testbench_file, test_names : list, run_all : bool = False, force_recompile : bool = False):
         """Run a single testbench with the XVUnit framework"""
         
        
@@ -38,22 +40,26 @@ class XVUnitRunner:
         self.__makedir(BUILD_DIR)
         self.__makedir(self.testbench_build_dir)
         
-        
+        # ----- COMPILATION -----
         if force_recompile or self.__needs_recompile(prj_path, module_name):
             print("Compiling...")
             self.__compile(prj_path)
 
+        # ----- ELABORATION -----
         if force_recompile or self.__needs_reelaboration():
             print("Elaborating...")
             self.__elaborate(module_name)
 
-        if test_names == []:
-            print(f"No tests were run")
+        # ----- SIMULATION -----
+        if run_all:
+            print("Running simulation...")
+            self.__simulate(module_name, self.__generate_runner_cfg([]))
+        elif test_names == [] and not run_all:
+            print(f"{colorama.Fore.YELLOW}No tests were run!")
         else:
             print("Running simulation...")
-            
-        # note - when passing [] this will execute with __all__ parameter
-        self.__simulate(module_name, self.__generate_runner_cfg(test_names))
+            self.__simulate(module_name, self.__generate_runner_cfg(test_names))
+                    
 
         
     

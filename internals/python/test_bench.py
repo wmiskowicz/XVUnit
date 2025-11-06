@@ -1,6 +1,6 @@
 import os
 import re
-import sys
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, Dict, List
 
@@ -22,6 +22,7 @@ class Testbench:
     def __init__(self, name: str, file_path : str):
         self.name = name
         self.file_path = file_path
+        self.prj_path = self.__get_prj_path(file_path)
         self.test_cases_dict = self.get_test_cases_dict()
         
     
@@ -67,3 +68,13 @@ class Testbench:
                 selected_tc.append(tc_name)
         
         return selected_tc
+    
+    def __get_prj_path(self, testbench_path):
+        testbench_path = Path(testbench_path)
+        tb_dir = testbench_path.parent
+        test_name = testbench_path.stem[:-3]
+        
+        prj_path = os.path.join(tb_dir, f'{test_name}.prj')
+        print(prj_path)
+        return prj_path
+        

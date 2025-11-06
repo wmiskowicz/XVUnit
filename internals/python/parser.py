@@ -69,7 +69,7 @@ class Parser:
                     test_name = line.split('test_start:')[1].strip()
                     current_test = test_name
                     current_log = [f"// Test: {test_name}"]
-                    print(f"Started monitoring test: {test_name}")
+                    print(f"Started test: {test_name}")
                     
                 elif line == 'test_suite_done':
                     # Finalize current test and break
