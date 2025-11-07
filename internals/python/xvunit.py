@@ -2,6 +2,7 @@ import threading
 import time
 import os, sys
 import colorama
+import fnmatch
 from typing import List
 from typing import Dict, Optional
 
@@ -28,21 +29,21 @@ class XVunit:
         self.refresh_thread = None
         
         self.current_testbench_name = None
-        self.all_tb_dict = self.parser.get_xvunit_testbenches_dict()
+        self.all_tb_dict = self.parser.get_xvunit_testbenches_dict()        
         self.line_ind = 0
         
         
-    def run_testbench(self, testbench_name: str, tests_to_run: List[str], run_all : bool = False):
-        self.parser.set_current_testbench_name(testbench_name)
-        matched_testbench = self.match_testbench(testbench_name, tests_to_run)
-        self.create_prj(matched_testbench)
+    def run_testbench(self, testbench: Testbench, tests_to_run: List[str], run_all : bool = False):
+        self.parser.set_current_testbench_name(testbench.name)
+        testbench.select_test_cases_to_run(tests_to_run)
+        self.create_prj(testbench)
         
         self._stop_refresh_thread.clear()
         self.refresh_thread = threading.Thread(target=self._refresh_worker)
         self.refresh_thread.start()
         
         try:
-            self.runner.run_test(matched_testbench.file_path, matched_testbench.get_selected_test_cases_names(), run_all)
+            self.runner.run_test(testbench.file_path, testbench.get_selected_test_cases_names(), run_all)
         finally:
             self._stop_refresh_thread.set()
             if self.refresh_thread:
@@ -62,6 +63,42 @@ class XVunit:
         
         
         self.fm.create_prj(testbench.prj_path, source_files)
+        
+        
+
+    def match_and_run(self, test_input: list):
+        found_any_testbench = False
+        test_parts = test_input.split('.')
+        
+        if len(test_parts) == 1:
+            for tb_name, tb_class in self.all_tb_dict.items():
+                if fnmatch.fnmatch(tb_name, test_parts[0]):
+                    self.run_testbench(tb_class, [], run_all=True)
+                    found_any_testbench = True
+                    
+            if not found_any_testbench:   
+                print(colorama.Fore.YELLOW + f"No testbench match found!")
+                sys.exit()
+              
+        elif len(test_parts) == 2:
+            for tb_name, tb_class in self.all_tb_dict.items():
+                if fnmatch.fnmatch(tb_name, test_parts[0]):
+                    found_any_testbench = True
+                    
+                    matched_test_cases = [
+                        tc_key for tc_key in tb_class.get_test_cases_dict().keys()
+                        if fnmatch.fnmatch(tc_key, test_parts[1])
+                    ]
+                    self.run_testbench(tb_class, matched_test_cases)
+                    
+            if not found_any_testbench:   
+                print(colorama.Fore.YELLOW + f"No testbench match found!")
+                sys.exit()
+        else:
+            # Defensive coding - should never happen
+            print(colorama.Fore.YELLOW + f"No test found")
+            sys.exit()
+        
     
     def _refresh_worker(self):
         while not self._stop_refresh_thread.is_set():
@@ -76,7 +113,7 @@ class XVunit:
     def match_testbench(self, testbench_name : str, tc_to_run : list) -> Testbench: 
                
         for tb_name, tb_class in self.all_tb_dict.items():
-            if tb_name == testbench_name:
+            if fnmatch.fnmatch(tb_name, testbench_name):
                 matched_tb = tb_class
         
         tests_to_run_set = set(tc_to_run)
@@ -93,8 +130,3 @@ class XVunit:
             for tc_name in tb_class.get_test_cases_dict().keys():
                 print(f'{tb_name}.{tc_name}')
     
-
-# For testing purposes
-# xvunit = XVunit()
-# xvunit.run_testbench('mine_planter_xvunit', [], True)
-# xvunit.run_testbench('new_test', ["TC005"])

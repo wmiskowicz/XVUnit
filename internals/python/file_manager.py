@@ -82,10 +82,3 @@ class FileManager:
         pkg_if_files = [f for f in files if "_pkg" in f or "_if" in f]
         other_files = [f for f in files if "_pkg" not in f and "_if" not in f]
         return sorted(pkg_if_files) + sorted(other_files)
-
-
-    
-    
-fm = FileManager()
-hdl_files = fm.collect_hdl_files([r"C:\Users\wojte\Documents\Saper_new\rtl\z_game_setup", r"C:\Users\wojte\Documents\Saper_new\sim\mine_planter_xvunit", r"C:\Users\wojte\Documents\Saper_new\sim\common", r"C:\Users\wojte\Documents\Saper_new\XVunit\internals\verilog"])
-fm.create_prj(r"C:\Users\wojte\Documents\Saper_new\sim\mine_planter_xvunit\mine_planter_xvunit.prj", hdl_files)

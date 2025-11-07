@@ -75,6 +75,5 @@ class Testbench:
         test_name = testbench_path.stem[:-3]
         
         prj_path = os.path.join(tb_dir, f'{test_name}.prj')
-        print(prj_path)
         return prj_path
         
