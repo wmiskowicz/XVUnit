@@ -17,7 +17,7 @@ def main():
     if args.list:
         xvunit.list()
     elif args.test:
-        xvunit.match_and_run(args.test)
+        xvunit.match_and_run(args.test, args.gui)
     else:
         parser.print_help()
         sys.exit(1)

@@ -1,6 +1,7 @@
 import os, sys
 import subprocess
 import threading 
+import tempfile
 import time
 import colorama
 from pathlib import Path
@@ -9,10 +10,12 @@ from typing import Optional, Dict, List
 sys.path.append(os.path.dirname(__file__))
 from paths import *
 from parser import Parser
+from file_manager import FileManager
 
 class XVUnitRunner:
     def __init__(self):
         self.parser = Parser()
+        self.fm = FileManager()
         self.project_dir = PROJECT_DIR
         self.sim_dir    = SIM_DIR
         self.testbench_build_dir = None
@@ -27,7 +30,7 @@ class XVUnitRunner:
         return self.sim_running.is_set()
 
     
-    def run_test(self, testbench_file, test_names : list, run_all : bool = False, force_recompile : bool = False):
+    def run_test(self, testbench_file, test_names : list, run_all : bool = False, force_recompile : bool = False, enable_gui = False):
         """Run a single testbench with the XVUnit framework"""
         
        
@@ -53,12 +56,12 @@ class XVUnitRunner:
         # ----- SIMULATION -----
         if run_all:
             print("Running simulation...")
-            self.__simulate(module_name, self.__generate_runner_cfg([]))
+            self.__simulate(module_name, self.__generate_runner_cfg([]), enable_gui)
         elif test_names == [] and not run_all:
             print(f"{colorama.Fore.YELLOW}No tests were run!")
         else:
             print("Running simulation...")
-            self.__simulate(module_name, self.__generate_runner_cfg(test_names))
+            self.__simulate(module_name, self.__generate_runner_cfg(test_names), enable_gui)
                     
 
         
@@ -90,17 +93,46 @@ class XVUnitRunner:
             print(f"Elaboration failed: {result.stdout}")
         
         
-    def __simulate(self, module_name : str, runner_cfg):
-        run_cmd = (
-            f'{self.setup_cmd} xsim work.{module_name} '
-            f'-testplusarg "runner_cfg={runner_cfg}" --runall'
-        )
+    def __simulate(self, module_name : str, runner_cfg, enable_gui=False):
+        if enable_gui:
+            
+            # Search for wave configuration file
+            wcfg_file = self.fm.get_wcfg_file(module_name)
+            
+            # Create a temp .tcl file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.tcl', delete=False) as f:
+                if not wcfg_file:
+                    f.write('create_wave_config\n')
+                    f.write('log_wave *\n')
+                f.write('run all\n')
+                if not wcfg_file:
+                    f.write('add_wave /\n')
+                temp_tcl_file = f.name
+                
+            
+            run_cmd = (
+                f'{self.setup_cmd} xsim work.{module_name} '
+                f'-testplusarg "runner_cfg={runner_cfg}" -gui '
+                f'-t {os.path.abspath(temp_tcl_file).replace("\\", "/")} '
+            )
+           
+            if wcfg_file:
+                run_cmd += f' -view {wcfg_file}'
+                
+        else:
+            run_cmd = (
+                f'{self.setup_cmd} xsim work.{module_name} '
+                f'-testplusarg "runner_cfg={runner_cfg}" --runall'
+            )
         
         try:
             self.sim_running.set()
             result = subprocess.run(run_cmd, shell=True, cwd=self.testbench_build_dir, capture_output=True, text=True)
+            if result.returncode != 0:
+                print(f"Simulation failed: {result.stdout}")
         finally:
             self.sim_running.clear()
+    
     
     def __needs_recompile(self, prj_path, module_name):
         """Check if recompilation is needed based on file timestamps."""

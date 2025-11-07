@@ -1,6 +1,7 @@
 import threading
 import time
 import colorama
+import glob
 from typing import List
 from typing import Dict, Optional
 
@@ -82,3 +83,7 @@ class FileManager:
         pkg_if_files = [f for f in files if "_pkg" in f or "_if" in f]
         other_files = [f for f in files if "_pkg" not in f and "_if" not in f]
         return sorted(pkg_if_files) + sorted(other_files)
+    
+    def get_wcfg_file(self, module_name) -> str:
+        wcfg_files = glob.glob(os.path.join(SIM_DIR, module_name[:-3], "*.wcfg"))
+        return wcfg_files[0] if wcfg_files else None

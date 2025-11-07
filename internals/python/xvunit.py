@@ -33,7 +33,7 @@ class XVunit:
         self.line_ind = 0
         
         
-    def run_testbench(self, testbench: Testbench, tests_to_run: List[str], run_all : bool = False):
+    def run_testbench(self, testbench: Testbench, tests_to_run: List[str], run_all : bool = False, enable_gui=False):
         self.parser.set_current_testbench_name(testbench.name)
         testbench.select_test_cases_to_run(tests_to_run)
         self.create_prj(testbench)
@@ -43,7 +43,7 @@ class XVunit:
         self.refresh_thread.start()
         
         try:
-            self.runner.run_test(testbench.file_path, testbench.get_selected_test_cases_names(), run_all)
+            self.runner.run_test(testbench.file_path, testbench.get_selected_test_cases_names(), run_all, enable_gui=enable_gui)
         finally:
             self._stop_refresh_thread.set()
             if self.refresh_thread:
@@ -66,14 +66,15 @@ class XVunit:
         
         
 
-    def match_and_run(self, test_input: list):
+    def match_and_run(self, test_input: list, gui_arg):
         found_any_testbench = False
         test_parts = test_input.split('.')
+        enable_gui = bool(gui_arg)
         
         if len(test_parts) == 1:
             for tb_name, tb_class in self.all_tb_dict.items():
                 if fnmatch.fnmatch(tb_name, test_parts[0]):
-                    self.run_testbench(tb_class, [], run_all=True)
+                    self.run_testbench(tb_class, [], run_all=True, enable_gui=enable_gui)
                     found_any_testbench = True
                     
             if not found_any_testbench:   
@@ -89,7 +90,7 @@ class XVunit:
                         tc_key for tc_key in tb_class.get_test_cases_dict().keys()
                         if fnmatch.fnmatch(tc_key, test_parts[1])
                     ]
-                    self.run_testbench(tb_class, matched_test_cases)
+                    self.run_testbench(tb_class, matched_test_cases, enable_gui=enable_gui)
                     
             if not found_any_testbench:   
                 print(colorama.Fore.YELLOW + f"No testbench match found!")
