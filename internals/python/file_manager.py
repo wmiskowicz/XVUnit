@@ -1,6 +1,7 @@
 import threading
 import time
 import colorama
+import tempfile
 import glob
 from typing import List
 from typing import Dict, Optional
@@ -87,3 +88,15 @@ class FileManager:
     def get_wcfg_file(self, module_name) -> str:
         wcfg_files = glob.glob(os.path.join(SIM_DIR, module_name[:-3], "*.wcfg"))
         return wcfg_files[0] if wcfg_files else None
+    
+    def create_temp_tcl(self, is_wcfg : bool) -> str:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.tcl', delete=False) as f:
+            if not is_wcfg:
+                f.write('create_wave_config\n')
+                f.write('log_wave *\n') # optionally: log_wave -r *
+            f.write('run all\n')
+            if not is_wcfg:
+                f.write('add_wave /\n') # optionally: add_wave -r /
+                
+            return os.path.abspath(f.name).replace("\\", "/")
+

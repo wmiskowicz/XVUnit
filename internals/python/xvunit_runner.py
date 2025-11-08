@@ -1,7 +1,6 @@
 import os, sys
 import subprocess
 import threading 
-import tempfile
 import time
 import colorama
 from pathlib import Path
@@ -98,22 +97,13 @@ class XVUnitRunner:
             
             # Search for wave configuration file
             wcfg_file = self.fm.get_wcfg_file(module_name)
-            
-            # Create a temp .tcl file
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.tcl', delete=False) as f:
-                if not wcfg_file:
-                    f.write('create_wave_config\n')
-                    f.write('log_wave *\n')
-                f.write('run all\n')
-                if not wcfg_file:
-                    f.write('add_wave /\n')
-                temp_tcl_file = f.name
+            temp_tcl_file = self.fm.create_temp_tcl(bool(wcfg_file))
                 
             
             run_cmd = (
                 f'{self.setup_cmd} xsim work.{module_name} '
                 f'-testplusarg "runner_cfg={runner_cfg}" -gui '
-                f'-t {os.path.abspath(temp_tcl_file).replace("\\", "/")} '
+                f'-t {temp_tcl_file} '
             )
            
             if wcfg_file:
@@ -131,6 +121,7 @@ class XVUnitRunner:
             if result.returncode != 0:
                 print(f"Simulation failed: {result.stdout}")
         finally:
+            os.unlink(temp_tcl_file)
             self.sim_running.clear()
     
     
