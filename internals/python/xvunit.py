@@ -28,13 +28,14 @@ class XVunit:
         self._stop_refresh_thread = threading.Event()
         self.refresh_thread = None
         
-        self.current_testbench_name = None
+        self.current_testbench = None
         self.all_tb_dict = self.parser.get_xvunit_testbenches_dict()        
         self.line_ind = 0
         
         
     def run_testbench(self, testbench: Testbench, tests_to_run: List[str], run_all : bool = False, enable_gui=False):
-        self.parser.set_current_testbench_name(testbench.name)
+        self.parser.set_current_parser_testbench(testbench)
+        self.current_testbench = testbench
         testbench.select_test_cases_to_run(tests_to_run)
         self.create_prj(testbench)
         
@@ -43,7 +44,7 @@ class XVunit:
         self.refresh_thread.start()
         
         try:
-            self.runner.run_test(testbench.file_path, testbench.get_selected_test_cases_names(), run_all, enable_gui=enable_gui)
+            self.runner.run_test(testbench.file_path, testbench.get_selected_test_cases_names(), run_all=run_all, enable_gui=enable_gui)
         finally:
             self._stop_refresh_thread.set()
             if self.refresh_thread:
@@ -74,8 +75,11 @@ class XVunit:
         if len(test_parts) == 1:
             for tb_name, tb_class in self.all_tb_dict.items():
                 if fnmatch.fnmatch(tb_name, test_parts[0]):
+                    tb_class.tb_selected = True
                     self.run_testbench(tb_class, [], run_all=True, enable_gui=enable_gui)
                     found_any_testbench = True
+                    
+            self.__print_summary()
                     
             if not found_any_testbench:   
                 print(colorama.Fore.YELLOW + f"No testbench match found!")
@@ -85,6 +89,7 @@ class XVunit:
             for tb_name, tb_class in self.all_tb_dict.items():
                 if fnmatch.fnmatch(tb_name, test_parts[0]):
                     found_any_testbench = True
+                    tb_class.tb_selected = True
                     
                     matched_test_cases = [
                         tc_key for tc_key in tb_class.get_test_cases_dict().keys()
@@ -99,18 +104,40 @@ class XVunit:
             # Defensive coding - should never happen
             print(colorama.Fore.YELLOW + f"No test found")
             sys.exit()
-        
+                    
     
     def _refresh_worker(self):
+        first_iteration = True
         while not self._stop_refresh_thread.is_set():
             if self.runner.is_simulation_running() and not self.parser.is_parsing_done():
-                time.sleep(2) # wait for log to clear
+                if first_iteration:
+                    time.sleep(2) # wait for log to clear
+                    first_iteration = False
+                    
                 self.parser.check_log()
+                
             time.sleep(0.5)
+            
         
+    def __print_summary(self):
+        print(f'\n\n ----- SUMMARY -----')
+        all_passed = True
         
+        for tb_name, tb_class in self.all_tb_dict.items():
+            if tb_class.tb_selected:
+                for tc_name, tc_class in tb_class.test_cases_dict.items(): 
+                    
+                    print(f'{tb_name}.{tc_name} -', end='')
+                    if tc_class.ready:
+                        if tc_class.passed:
+                            print(f'{colorama.Fore.GREEN} passed')
+                        else:
+                            all_passed = False
+                            print(f'{colorama.Fore.RED} failed')
         
-        
+        if all_passed:
+            print(f'\n{colorama.Fore.GREEN} All passed')
+            
     def match_testbench(self, testbench_name : str, tc_to_run : list) -> Testbench: 
                
         for tb_name, tb_class in self.all_tb_dict.items():

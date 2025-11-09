@@ -15,15 +15,15 @@ class Parser:
     def __init__(self):
                 
         colorama.init(autoreset=True)
-        self.current_testbench_name = None
+        self.current_testbench = None
         self.finished_parsing = False
         self.testbench_build_dir = None
     
-    def set_current_testbench_name(self, testbench_name : str):
-        self.current_testbench_name = testbench_name
-        self.testbench_build_dir = os.path.join(BUILD_DIR, testbench_name)
+    def set_current_parser_testbench(self, testbench : Testbench):
+        self.current_testbench = testbench
+        self.testbench_build_dir = os.path.join(BUILD_DIR, testbench.name)
         self.finished_parsing = False
-
+         
     def check_log(self, last_file_position: int = 0) -> Dict[str, str]:
         """Monitor log file for changes and create/update <tc_name>.log files in real-time.
         
@@ -34,7 +34,7 @@ class Parser:
             Dictionary with test names as keys and log contents as values
             Also returns the new file position for next call
         """
-        xsim_log = os.path.join(BUILD_DIR, self.current_testbench_name, "xsim.log")
+        xsim_log = os.path.join(BUILD_DIR, self.current_testbench.name, "xsim.log")
         if not os.path.exists(xsim_log):
             print(f"Warning: path:{xsim_log} ]'not found")
             return 
@@ -69,14 +69,13 @@ class Parser:
                     test_name = line.split('test_start:')[1].strip()
                     current_test = test_name
                     current_log = [f"// Test: {test_name}"]
-                    print(f"Started test: {test_name}")
+                    print(f"\nRunning test: {self.current_testbench.name}.{test_name}")
                     
                 elif line == 'test_suite_done':
                     # Finalize current test and break
                     if current_test and current_log:
                         self._write_test_log(current_test, '\n'.join(current_log))
                     self.finished_parsing = True
-                    print("Test suite completed")
                     
                     break
                     
@@ -93,17 +92,25 @@ class Parser:
 
     def _write_test_log(self, test_name: str, log_content: str):
         """Write individual test log to file"""
-        test_dir = os.path.join(self.testbench_build_dir, self.current_testbench_name, test_name)
+        
+        test_dir = os.path.join(self.testbench_build_dir, self.current_testbench.name, test_name)
         os.makedirs(test_dir, exist_ok=True)
         
         log_file_path = os.path.join(test_dir, f"{test_name}.log")
+        self.current_testbench.test_cases_dict[test_name].ready = True
+        
         try:
+            print(f'Test output file: {log_file_path}')
+            
             with open(log_file_path, 'w') as f:
                 if 'ERROR' in log_content.upper():
+                    self.current_testbench.test_cases_dict[test_name].passed = False
                     print(f"{test_name} {colorama.Fore.RED}failed")
                 else:
+                    self.current_testbench.test_cases_dict[test_name].passed = True
                     print(f"{test_name} {colorama.Fore.GREEN}passed")
                 f.write(log_content)
+                       
         except Exception as e:
             print(f"Error writing log file for {test_name}: {e}")
     

@@ -22,6 +22,7 @@ class Testbench:
     def __init__(self, name: str, file_path : str):
         self.name = name
         self.file_path = file_path
+        self.tb_selected = False
         self.prj_path = self.__get_prj_path(file_path)
         self.test_cases_dict = self.get_test_cases_dict()
         

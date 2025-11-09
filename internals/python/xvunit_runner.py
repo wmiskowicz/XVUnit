@@ -44,7 +44,7 @@ class XVUnitRunner:
         
         # ----- COMPILATION -----
         if force_recompile or self.__needs_recompile(prj_path, module_name):
-            print("Compiling...")
+            print("\nCompiling...")
             self.__compile(prj_path)
 
         # ----- ELABORATION -----
@@ -121,8 +121,9 @@ class XVUnitRunner:
             if result.returncode != 0:
                 print(f"Simulation failed: {result.stdout}")
         finally:
-            os.unlink(temp_tcl_file)
             self.sim_running.clear()
+            if enable_gui:
+                os.unlink(temp_tcl_file)
     
     
     def __needs_recompile(self, prj_path, module_name):
@@ -139,7 +140,7 @@ class XVUnitRunner:
             if os.path.exists(source_file):
                 source_time = os.path.getmtime(source_file)
                 if source_time > compile_time:
-                    print(f"Recompiling")
+                    print(f"{source_file} is older than {xvlog_log}. Recompiling")
                     return True
         
         
@@ -149,10 +150,7 @@ class XVUnitRunner:
             return True    
         
         compile_log_age = os.path.getmtime(xvlog_log)
-        
-        # Check if .prj is newer than compilation
-        if os.path.exists(prj_path) and os.path.getmtime(prj_path) > compile_log_age:
-            return True
+        print("Recompile not needed")
         
         return False
         
@@ -176,7 +174,7 @@ class XVUnitRunner:
                 print("Compilation is newer than elaboration - need to re-elaborate")
                 return True
         
-        print("No re-elaboration needed - using cached elaboration")
+        print("Reelaboration not needed")
         return False
     
     
