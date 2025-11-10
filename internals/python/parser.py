@@ -36,7 +36,7 @@ class Parser:
         """
         xsim_log = os.path.join(BUILD_DIR, self.current_testbench.name, "xsim.log")
         if not os.path.exists(xsim_log):
-            print(f"Warning: path:{xsim_log} ]'not found")
+            print(f"Warning: {xsim_log} 'not found")
             return 
         
         current_test: Optional[str] = None
@@ -110,9 +110,43 @@ class Parser:
                     self.current_testbench.test_cases_dict[test_name].passed = True
                     print(f"{test_name} {colorama.Fore.GREEN}passed")
                 f.write(log_content)
-                       
+            
+            self.__print_error_message(log_file_path)
+                    
         except Exception as e:
             print(f"Error writing log file for {test_name}: {e}")
+            
+            
+    def __print_error_message(self, log_file_path):
+        with open(log_file_path, 'r') as f:
+            lines = f.readlines()
+            error_lines = []
+            file = None
+            for index, line in enumerate(lines):
+                if 'ERROR' in line.upper():
+                    file = lines[index+1].split("File:")[1]
+                    error_string = f'{line.strip()}, \nFile: {file}'
+                    error_lines.append(error_string)
+            
+            if file:      
+                print(error_lines[0])
+                file_path, line_ind = file.split('Line: ')
+                self.__print_code_around_failed_line(file_path.strip(), int(line_ind)-1)
+            
+
+    def __print_code_around_failed_line(self, file_path, line_ind):
+        span = 4
+                
+        with open(file_path, 'r') as f:
+            lines = f.readlines()
+            # print(lines)
+            for index in range(-span, span):
+                if index == 0:
+                    prefix = '->'
+                else:
+                    prefix = ' '
+                print(prefix, lines[line_ind+index], end='')
+                
     
     def get_xvunit_testbenches_dict(self) -> Dict[str, Testbench]:
         """List all testbenches in the sim directory with ."""

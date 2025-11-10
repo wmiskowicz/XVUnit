@@ -42,17 +42,35 @@ class XVUnitRunner:
         self.__makedir(BUILD_DIR)
         self.__makedir(self.testbench_build_dir)
         
-        # ----- COMPILATION -----
+        self.compile(force_recompile, prj_path, module_name)
+        self.elaborate(force_recompile, prj_path, module_name)
+        self.simulate(module_name, test_names, run_all, enable_gui)
+
+                    
+
+    def compile(self, force_recompile : bool, prj_path : str, module_name : str):
+        
+        with open(prj_path, 'r') as prj_file:
+            prj_content = prj_file.read()
+            compile_vhdl = 'vhdl' in prj_content
+            
         if force_recompile or self.__needs_recompile(prj_path, module_name):
             print("\nCompiling...")
-            self.__compile(prj_path)
-
-        # ----- ELABORATION -----
+            self.__compile(prj_path, compile_vhdl)
+            
+            
+    def elaborate(self, force_recompile : bool, prj_path : str, module_name : str):
+        
+        with open(prj_path, 'r') as prj_file:
+            prj_content = prj_file.read()
+            compile_glbl = bool('glbl.v' in prj_content)
+            
         if force_recompile or self.__needs_reelaboration():
             print("Elaborating...")
-            self.__elaborate(module_name)
-
-        # ----- SIMULATION -----
+            self.__elaborate(module_name, compile_glbl)
+            
+            
+    def simulate(self, module_name : str, test_names : list, run_all : bool, enable_gui : bool):
         if run_all:
             print("Running simulation...")
             self.__simulate(module_name, self.__generate_runner_cfg([]), enable_gui)
@@ -60,36 +78,49 @@ class XVUnitRunner:
             print(f"{colorama.Fore.YELLOW}No tests were run!")
         else:
             print("Running simulation...")
-            self.__simulate(module_name, self.__generate_runner_cfg(test_names), enable_gui)
-                    
-
+            self.__simulate(module_name, self.__generate_runner_cfg(test_names), enable_gui)    
+            
+            
+    def __compile(self, prj_path, compile_vhdl):
         
-    
-    def __compile(self, prj_path):
+        if compile_vhdl:
+            vhdl_compile_cmd = (
+                f'{self.setup_cmd} xvhdl --incr --relax '
+                f'-prj {prj_path} '
+            )
+            
+            result = subprocess.run(vhdl_compile_cmd, shell=True, cwd=self.testbench_build_dir, capture_output=True, text=True)
         
-        compile_cmd = (
+        verilog_compile_cmd = (
             f'{self.setup_cmd} xvlog --incr --relax --sv '
             f'-i {os.path.join(self.project_dir, "XVunit/internals/verilog")} '
             f'-prj {prj_path} '
             f'-L uvm -L unisims_ver'
         )
         
-        result = subprocess.run(compile_cmd, shell=True, cwd=self.testbench_build_dir, capture_output=True, text=True)
+        result = subprocess.run(verilog_compile_cmd, shell=True, cwd=self.testbench_build_dir, capture_output=True, text=True)
         if result.returncode != 0:
-            print(f"Compilation failed: {result.stderr}")
-            print(f"STDOUT: {result.stdout}")
+            print(f"Compilation failed:")
+            print(f"{result.stdout}")
+            sys.exit()
         
-    def __elaborate(self, module_name : str):
+    def __elaborate(self, module_name : str, compile_glbl=False):
+        
+        compile_glbl_cmd = "work.glbl " if compile_glbl else ""
+
         
         elaborate_cmd = (
             f'{self.setup_cmd} xelab --incr --relax --debug typical '
             f'work.{module_name} '
-            f'-L uvm -L unisims_ver'
+            f'-snapshot {module_name} '
+            f'-L uvm -L unisims_ver '
+            f'{compile_glbl_cmd} '
         )
-        
+                
         result = subprocess.run(elaborate_cmd, shell=True, cwd=self.testbench_build_dir, capture_output=True, text=True)
         if result.returncode != 0:
             print(f"Elaboration failed: {result.stdout}")
+            sys.exit()
         
         
     def __simulate(self, module_name : str, runner_cfg, enable_gui=False):
@@ -101,7 +132,7 @@ class XVUnitRunner:
                 
             
             run_cmd = (
-                f'{self.setup_cmd} xsim work.{module_name} '
+                f'{self.setup_cmd} xsim {module_name} '
                 f'-testplusarg "runner_cfg={runner_cfg}" -gui '
                 f'-t {temp_tcl_file} '
             )
@@ -111,7 +142,7 @@ class XVUnitRunner:
                 
         else:
             run_cmd = (
-                f'{self.setup_cmd} xsim work.{module_name} '
+                f'{self.setup_cmd} xsim {module_name} '
                 f'-testplusarg "runner_cfg={runner_cfg}" --runall'
             )
         

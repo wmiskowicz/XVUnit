@@ -55,6 +55,7 @@ class XVunit:
         
         search_dirs = [
             os.path.join(PROJECT_DIR, 'rtl'),
+            os.path.join(PROJECT_DIR, 'fpga', 'rtl'),
             os.path.join(PROJECT_DIR, 'XVUnit', 'internals', 'verilog'),
             os.path.join(SIM_DIR, testbench.name),
             os.path.join(SIM_DIR, 'common'),
@@ -111,7 +112,7 @@ class XVunit:
         while not self._stop_refresh_thread.is_set():
             if self.runner.is_simulation_running() and not self.parser.is_parsing_done():
                 if first_iteration:
-                    time.sleep(2) # wait for log to clear
+                    time.sleep(4) # wait for log to clear
                     first_iteration = False
                     
                 self.parser.check_log()
