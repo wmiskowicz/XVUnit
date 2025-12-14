@@ -109,13 +109,14 @@ class XVunit:
     
     def _refresh_worker(self):
         first_iteration = True
+        line_ind = 0
         while not self._stop_refresh_thread.is_set():
             if self.runner.is_simulation_running() and not self.parser.is_parsing_done():
                 if first_iteration:
                     time.sleep(4) # wait for log to clear
                     first_iteration = False
                     
-                self.parser.check_log()
+                line_ind = self.parser.check_log(line_ind)
                 
             time.sleep(0.5)
             

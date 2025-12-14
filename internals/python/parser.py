@@ -18,29 +18,28 @@ class Parser:
         self.current_testbench = None
         self.finished_parsing = False
         self.testbench_build_dir = None
+        self.current_log = None
+        self.current_test = None
     
     def set_current_parser_testbench(self, testbench : Testbench):
         self.current_testbench = testbench
         self.testbench_build_dir = os.path.join(BUILD_DIR, testbench.name)
         self.finished_parsing = False
          
-    def check_log(self, last_file_position: int = 0) -> Dict[str, str]:
+    def check_log(self, last_file_position: int = 0) -> int:
         """Monitor log file for changes and create/update <tc_name>.log files in real-time.
         
         Args:
             last_file_position: Last read position in the file for incremental reading
             
         Returns:
-            Dictionary with test names as keys and log contents as values
-            Also returns the new file position for next call
+            The new file position for next call (returns last_file_position on error)
         """
         xsim_log = os.path.join(BUILD_DIR, self.current_testbench.name, "xsim.log")
         if not os.path.exists(xsim_log):
-            print(f"Warning: {xsim_log} 'not found")
-            return 
+            print(f"Warning: {xsim_log} not found")
+            return last_file_position
         
-        current_test: Optional[str] = None
-        current_log = []
         
         try:
             with open(xsim_log, 'r') as f:
@@ -51,9 +50,9 @@ class Parser:
                 new_content = f.read()
                 new_file_position = f.tell()
                 
-            # If no new content, return current state
+            # If no new content, return original position
             if not new_content:
-                return 
+                return last_file_position
                 
             lines = new_content.split('\n')
             
@@ -62,29 +61,32 @@ class Parser:
                 
                 if line.startswith('test_start:'):
                     # Save previous test log before starting new one
-                    if current_test and current_log:
-                        self._write_test_log(current_test, '\n'.join(current_log))
+                    if self.current_test and self.current_log:
+                        self._write_test_log(self.current_test, '\n'.join(self.current_log))
                     
                     # Start new test section
                     test_name = line.split('test_start:')[1].strip()
-                    current_test = test_name
-                    current_log = [f"// Test: {test_name}"]
+                    self.current_test = test_name
+                    self.current_log = [f"// Test: {test_name}"]
                     print(f"\nRunning test: {self.current_testbench.name}.{test_name}")
                     
                 elif line == 'test_suite_done':
                     # Finalize current test and break
-                    if current_test and current_log:
-                        self._write_test_log(current_test, '\n'.join(current_log))
+                    
+                    self._write_test_log(self.current_test, '\n'.join(self.current_log))
                     self.finished_parsing = True
                     
                     break
                     
-                elif current_test:
+                elif self.current_test:
                     if line:
-                        current_log.append(line)
+                        self.current_log.append(line)
+                        
+            return new_file_position if 'new_file_position' in locals() else last_file_position
                 
         except Exception as e:
             print(f"Error reading log file: {e}")
+            return last_file_position 
         
     
     def is_parsing_done(self) -> bool:
