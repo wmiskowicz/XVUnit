@@ -71,9 +71,9 @@ class FileManager:
                 f.write(" \\\n          ".join(vhdl_files))
                 f.write(" \\\n")
                 
-    def clear_prj(self, testbench : Testbench):   
-        if os.path.exists(testbench.prj_path):
-            os.remove(testbench.prj_path)
+    def clear_prj(self, prj_path):   
+        if os.path.exists(prj_path):
+            os.remove(prj_path)
                 
     def __prioritize_pkg_and_if(self, files):
         """Sort so that '_pkg' and '_if' files come first."""

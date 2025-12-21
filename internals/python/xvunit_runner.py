@@ -12,6 +12,7 @@ sys.path.append(os.path.dirname(__file__))
 from paths import *
 from parser import Parser
 from file_manager import FileManager
+from test_bench import Testbench
 
 class XVUnitRunner:
     def __init__(self):
@@ -23,6 +24,8 @@ class XVUnitRunner:
         self.setup_cmd  = f'call "{VIVADO_SETUP}" && '
         
         self.sim_running = threading.Event()
+        self.verbose = False
+        self.source_file_paths = []
         colorama.init(autoreset=True)
         
         
@@ -45,31 +48,40 @@ class XVUnitRunner:
         self.__makedir(self.testbench_build_dir)
         
         self.compile(force_recompile, prj_path, module_name)
-        self.elaborate(force_recompile, prj_path, module_name)
+        self.elaborate(force_recompile, module_name)
         self.simulate(module_name, test_names, run_all, enable_gui)
 
                     
 
     def compile(self, force_recompile : bool, prj_path : str, module_name : str):
         
-        with open(prj_path, 'r') as prj_file:
-            prj_content = prj_file.read()
-            compile_vhdl = 'vhdl' in prj_content
+        compile_vhdl = False
+        for file_path in self.source_file_paths:
+            if 'vhd' in file_path.lower():
+                compile_vhdl = True
+                break
             
-        if force_recompile or self.__needs_recompile(prj_path, module_name):
-            print("\nCompiling...")
+        if force_recompile:
+            self._create_prj(prj_path, self.source_file_paths)
+            self._create_prj(prj_path, self.source_file_paths)
+            self._clear_prj(prj_path)
+        elif self._list_files_that_need_recompilation(self.source_file_paths) != []:
+            self._create_prj(prj_path, self._list_files_that_need_recompilation(self.source_file_paths))
             self.__compile(prj_path, compile_vhdl)
+            self._clear_prj(prj_path)
             
             
-    def elaborate(self, force_recompile : bool, prj_path : str, module_name : str):
+    def elaborate(self, force_recompile : bool, module_name : str):
         
-        with open(prj_path, 'r') as prj_file:
-            prj_content = prj_file.read()
-            compile_glbl = bool('glbl.v' in prj_content)
+        compile_glbl = False
+        for file_path in self.source_file_paths:
+            if 'glbl.v' in file_path.lower():
+                compile_glbl = True
+                break
             
         if force_recompile or self.__needs_reelaboration():
-            print("Elaborating...")
             self.__elaborate(module_name, compile_glbl)
+
             
             
     def simulate(self, module_name : str, test_names : list, run_all : bool, enable_gui : bool):
@@ -101,7 +113,6 @@ class XVUnitRunner:
         )
         # Compile Verilog/SystemVerilog files
         self.__run_and_parse(verilog_compile_cmd, self.testbench_build_dir, fail_message="Verilog Compilation failed", success_message="Verilog Compilation successful", is_compilation=True)
-        
         
     def __elaborate(self, module_name : str, compile_glbl=False):
         
@@ -150,42 +161,35 @@ class XVUnitRunner:
             if enable_gui:
                 os.unlink(temp_tcl_file)
     
-    
-    def __needs_recompile(self, prj_path, module_name):
-        """Check if recompilation is needed based on file timestamps."""
-        source_files = self.parser.parse_prj(prj_path)
-        xvlog_log = os.path.join(self.testbench_build_dir, "xvlog.log")
-        
-        if not os.path.exists(xvlog_log):
-            print(f"{xvlog_log} doesn't exist - recompiling")
-            return True
-        
-        compile_time = os.path.getmtime(xvlog_log)
+    def _list_files_that_need_recompilation(self, source_files : List[str]) -> List[str]:
+        files_to_recompile = []
+        work_dir = os.path.join(self.testbench_build_dir, "xsim.dir", "work")
+        work_rlx = os.path.join(self.testbench_build_dir, "xsim.dir", "word", "work.rlx")
+
         for source_file in source_files:
             if os.path.exists(source_file):
-                source_time = os.path.getmtime(source_file)
-                if source_time > compile_time:
-                    print(f"{source_file} is older than {xvlog_log}. Recompiling")
-                    return True
-        
-        
-        module_work_dir = os.path.join(self.testbench_build_dir, "xsim.dir", f'{module_name}')
-        if not os.path.exists(module_work_dir):
-            print(f"{module_work_dir} doesn't exist - recompiling")
-            return True    
-        
-        compile_log_age = os.path.getmtime(xvlog_log)
-        print("Recompile not needed")
-        
-        return False
-        
-        
+                sdb_file = os.path.splitext(os.path.basename(source_file))[0] + '.sdb'
+                sdb_path = os.path.join(work_dir, sdb_file)
+
+                if os.path.exists(sdb_path):
+                    source_time = os.path.getmtime(source_file)
+                    compile_time = os.path.getmtime(sdb_path)
+                    if source_time > compile_time:
+                        files_to_recompile.append(source_file)
+                    
+                else:
+                    files_to_recompile.append(source_file)
+            else:
+                files_to_recompile.append(source_file)
+                
+                
+        return files_to_recompile
+
     def __needs_reelaboration(self):
         """Check if re-elaboration is needed."""
         # Check if xelab.log exists (indicates elaboration happened)
         xelab_log = os.path.join(self.testbench_build_dir, "xelab.log")
         if not os.path.exists(xelab_log):
-            print("xelab.log doesn't exist - need to elaborate")
             return True
         
         # Get elaboration time from xelab.log
@@ -196,10 +200,8 @@ class XVUnitRunner:
         if os.path.exists(xvlog_log):
             compile_log_age = os.path.getmtime(xvlog_log)
             if compile_log_age > elab_time:
-                print("Compilation is newer than elaboration - need to re-elaborate")
                 return True
         
-        print("Reelaboration not needed")
         return False
     
     
@@ -219,8 +221,14 @@ class XVUnitRunner:
         if not Path.is_dir(Path(path)):
             os.makedirs(path, exist_ok=True)
             
+    def _create_prj(self, prj_path, source_file_paths : list):        
+        self.fm.create_prj(prj_path, source_file_paths)
+        
+    def _clear_prj(self, prj_path):   
+        self.fm.clear_prj(prj_path)
             
-    def __run_and_parse(self, command, build_dir, fail_message="Failed", success_message="Successful", verbose=False, is_compilation=False):
+            
+    def __run_and_parse(self, command, build_dir, fail_message="Failed", success_message="Successful", is_compilation=False):
 
         def read_output(stream, queue, stream_name):
             """Read from a stream and put lines in a queue"""
@@ -265,8 +273,8 @@ class XVUnitRunner:
                 stream_name, line = output_queue.get(timeout=0.1)
                 
                 if line:
-                    if verbose:
-                        print(f"OUT: {line}", end='')
+                    if self.verbose:
+                        print(line, end='')
                     if is_compilation:
                         stripped = line.rstrip('\n')
                         self.parser.parse_line(stripped)
@@ -283,7 +291,7 @@ class XVUnitRunner:
                         try:
                             stream_name, line = output_queue.get_nowait()
                             if line:
-                                if verbose:
+                                if self.verbose:
                                     print(f"OUT: {line}", end='')
                                 if is_compilation:
                                     stripped = line.rstrip('\n')
@@ -299,7 +307,7 @@ class XVUnitRunner:
             except KeyboardInterrupt:
                 print("\nInterrupted by user")
                 process.terminate()
-                break
+                sys.exit()
 
         returncode = process.wait()
         if returncode != 0:

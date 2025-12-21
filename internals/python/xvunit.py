@@ -25,6 +25,7 @@ class XVunit:
         self.fm = FileManager()
         self.runner = XVUnitRunner()
         self.logger = Logger()
+        self.verbose = False
         
         self._stop_refresh_thread = threading.Event()
         self.refresh_thread = None
@@ -37,7 +38,6 @@ class XVunit:
     def run_testbench(self, testbench: Testbench, tests_to_run: List[str], run_all : bool = False, enable_gui=False):
         self.parser.set_current_parser_testbench(testbench)
         testbench.select_test_cases_to_run(tests_to_run)
-        self.create_prj(testbench)
         
         
         self._stop_refresh_thread.clear()
@@ -47,30 +47,26 @@ class XVunit:
         try:
             self.runner.run_test(testbench.file_path, testbench.get_selected_test_cases_names(), run_all=run_all, enable_gui=enable_gui)
         finally:
-            self.clear_prj(testbench)
             self._stop_refresh_thread.set()
             if self.refresh_thread:
                 self.refresh_thread.join()
                 
     def set_parameters(self, sources : dict):
         self.source_file_paths = self.parser._match_sources(sources)
+        self.runner.source_file_paths = self.source_file_paths
         self.all_tb_dict = self.parser.create_testbench_dict(self.source_file_paths)
-        
-    
-    def create_prj(self, testbench : Testbench):        
-        self.fm.create_prj(testbench.prj_path, self.source_file_paths)
-        
-    def clear_prj(self, testbench : Testbench):   
-        self.fm.clear_prj(testbench)
         
     def run(self, argv):
 
         found_any_testbench = False
         test_parts = argv[1].split('.')
         enable_gui = ('-g' in argv)
+        self.verbose = ('-v' in argv)
+        self.runner.verbose = self.verbose
         
         if '-h' in argv:
             print("-h - Print help")
+            print("-v - Verbose output")
             print("-l - List available tests")
             print("-g - Run with gui")
             sys.exit()
@@ -118,7 +114,7 @@ class XVunit:
         while not self._stop_refresh_thread.is_set():
             if self.runner.is_simulation_running() and not self.parser.is_parsing_done():
                 if first_iteration:
-                    time.sleep(4) # wait for log to clear
+                    time.sleep(1) # wait for log to clear
                     first_iteration = False
                     
                 line_ind = self.parser.check_log(line_ind)

@@ -273,10 +273,6 @@ class Parser:
             print(f"Compiling {path}", end='')
             self.previous_line = line
             
-        # The last line before elaboration  
-        # elif 'ECHO is off' in line and (self.previous_line.startswith('INFO: [VRFC 10-2263]') or self.previous_line.startswith('INFO: [VRFC 10-311]')):
-        #     print(f'{colorama.Fore.GREEN} [pass]')
-        #     self.previous_line = line
         elif line.startswith('ERROR: [VRFC 10-4982]'):
             print(f'{colorama.Fore.RED} [fail]')
         else:
