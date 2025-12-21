@@ -4,15 +4,15 @@ import os, sys
 import colorama
 import fnmatch
 from typing import List
-from typing import Dict, Optional
 
 sys.path.append(os.path.dirname(__file__))
 
 from paths import *
-from test_bench import Testbench, TestCase
+from test_bench import Testbench
 from xvunit_runner import XVUnitRunner
 from parser import Parser
 from file_manager import FileManager
+from logger import Logger
 
 
 class XVunit:
@@ -24,11 +24,11 @@ class XVunit:
         self.parser = Parser()
         self.fm = FileManager()
         self.runner = XVUnitRunner()
+        self.logger = Logger()
         
         self._stop_refresh_thread = threading.Event()
         self.refresh_thread = None
         
-        self.current_testbench = None
         self.all_tb_dict = {}       
         self.source_file_paths = [] 
         self.line_ind = 0
@@ -36,7 +36,6 @@ class XVunit:
         
     def run_testbench(self, testbench: Testbench, tests_to_run: List[str], run_all : bool = False, enable_gui=False):
         self.parser.set_current_parser_testbench(testbench)
-        self.current_testbench = testbench
         testbench.select_test_cases_to_run(tests_to_run)
         self.create_prj(testbench)
         
@@ -48,6 +47,7 @@ class XVunit:
         try:
             self.runner.run_test(testbench.file_path, testbench.get_selected_test_cases_names(), run_all=run_all, enable_gui=enable_gui)
         finally:
+            self.clear_prj(testbench)
             self._stop_refresh_thread.set()
             if self.refresh_thread:
                 self.refresh_thread.join()
@@ -56,10 +56,12 @@ class XVunit:
         self.source_file_paths = self.parser._match_sources(sources)
         self.all_tb_dict = self.parser.create_testbench_dict(self.source_file_paths)
         
-        
     
     def create_prj(self, testbench : Testbench):        
         self.fm.create_prj(testbench.prj_path, self.source_file_paths)
+        
+    def clear_prj(self, testbench : Testbench):   
+        self.fm.clear_prj(testbench)
         
     def run(self, argv):
 
@@ -84,7 +86,7 @@ class XVunit:
                     self.run_testbench(tb_class, [], run_all=True, enable_gui=enable_gui)
                     found_any_testbench = True
                     
-            self.__print_summary()
+            self.logger.print_summary(self.all_tb_dict)
                     
             if not found_any_testbench:   
                 print(colorama.Fore.YELLOW + f"No testbench match found!")
@@ -122,26 +124,6 @@ class XVunit:
                 line_ind = self.parser.check_log(line_ind)
                 
             time.sleep(0.5)
-            
-        
-    def __print_summary(self):
-        print(f'\n\n ----- SUMMARY -----')
-        all_passed = True
-        
-        for tb_name, tb_class in self.all_tb_dict.items():
-            if tb_class.tb_selected:
-                for tc_name, tc_class in tb_class.test_cases_dict.items(): 
-                    
-                    print(f'{tb_name}.{tc_name} -', end='')
-                    if tc_class.ready:
-                        if tc_class.passed:
-                            print(f'{colorama.Fore.GREEN} passed')
-                        else:
-                            all_passed = False
-                            print(f'{colorama.Fore.RED} failed')
-        
-        if all_passed:
-            print(f'\n{colorama.Fore.GREEN} All passed')
             
         
     def list(self):

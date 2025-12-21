@@ -1,15 +1,10 @@
-import threading
-import time
-import colorama
 import tempfile
 import glob
 from typing import List
-from typing import Dict, Optional
 
 import os
-from pathlib import Path
 from paths import *
-from test_bench import Testbench, TestCase
+from test_bench import Testbench
 
 
 class FileManager:
@@ -53,12 +48,10 @@ class FileManager:
                 vhdl_files.append(file)
                 
         sv_files = self.__prioritize_pkg_and_if(sv_files)
-        
-        
+               
         
         with open(prj_path, "w") as f:
             f.write("# List of files defining the modules used during the test.\n")
-            f.write("# This file can be auto-generated using -prj flag of run.py script.\n")
             f.write("# For syntax detail see AMD Xilinx UG 900:\n")
             f.write("# https://docs.xilinx.com/r/en-US/ug900-vivado-logic-simulation/Project-File-.prj-Syntax\n")
             f.write("\n")
@@ -78,6 +71,9 @@ class FileManager:
                 f.write(" \\\n          ".join(vhdl_files))
                 f.write(" \\\n")
                 
+    def clear_prj(self, testbench : Testbench):   
+        if os.path.exists(testbench.prj_path):
+            os.remove(testbench.prj_path)
                 
     def __prioritize_pkg_and_if(self, files):
         """Sort so that '_pkg' and '_if' files come first."""

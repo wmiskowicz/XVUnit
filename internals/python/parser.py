@@ -1,5 +1,5 @@
 import fnmatch
-import time
+import re
 import colorama
 from typing import List
 from typing import Dict, Optional
@@ -20,6 +20,9 @@ class Parser:
         self.testbench_build_dir = None
         self.current_log = None
         self.current_test = None
+        
+        self.previous_line = None
+        self.print_stdout = False
     
     def set_current_parser_testbench(self, testbench : Testbench):
         self.current_testbench = testbench
@@ -253,3 +256,31 @@ class Parser:
                     
         return file_paths
     
+    def parse_line(self, line : str):
+        
+        # Initial case
+        if 'ECHO is off' in line and self.previous_line is None:
+            self.previous_line = line
+        # Regular case
+        if line.startswith('INFO: [VRFC 10-2263]'):
+            if self.previous_line.startswith('INFO: [VRFC 10-2263]') or self.previous_line.startswith('INFO: [VRFC 10-311]'):
+                print(f'{colorama.Fore.GREEN} [pass]')
+            else:
+                print('')
+                
+            match = re.search(r'"([^"]+)"', line)
+            path = match.group(1)
+            print(f"Compiling {path}", end='')
+            self.previous_line = line
+            
+        # The last line before elaboration  
+        # elif 'ECHO is off' in line and (self.previous_line.startswith('INFO: [VRFC 10-2263]') or self.previous_line.startswith('INFO: [VRFC 10-311]')):
+        #     print(f'{colorama.Fore.GREEN} [pass]')
+        #     self.previous_line = line
+        elif line.startswith('ERROR: [VRFC 10-4982]'):
+            print(f'{colorama.Fore.RED} [fail]')
+        else:
+            self.previous_line = line
+            
+            
+            

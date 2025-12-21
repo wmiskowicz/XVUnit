@@ -11,6 +11,8 @@ XVUnitCommon = run_XVUnitCommon()
 sources = {
     "rtl": [
         os.path.join(PROJECT_DIR, 'rtl', "timer", "*.sv"),
+        # os.path.join(PROJECT_DIR, 'rtl', "*", "*.sv"),
+        # os.path.join(PROJECT_DIR, 'rtl', "top_vga", "*.sv"),
         os.path.join(PROJECT_DIR, 'rtl', "z_game_setup", "game_pkg.sv")
     ],
     "sim": [

@@ -5,6 +5,8 @@ import time
 import colorama
 from pathlib import Path
 from typing import Optional, Dict, List
+import select
+from queue import Queue, Empty
 
 sys.path.append(os.path.dirname(__file__))
 from paths import *
@@ -88,8 +90,8 @@ class XVUnitRunner:
                 f'{self.setup_cmd} xvhdl --incr --relax '
                 f'-prj {prj_path} '
             )
-            
-            result = subprocess.run(vhdl_compile_cmd, shell=True, cwd=self.testbench_build_dir, capture_output=True, text=True)
+            # Compile VHDL files
+            self.__run_and_parse(vhdl_compile_cmd, self.testbench_build_dir, fail_message="VHDL Compilation failed", success_message="VHDL Compilation successful")
         
         verilog_compile_cmd = (
             f'{self.setup_cmd} xvlog --incr --relax --sv '
@@ -97,12 +99,9 @@ class XVUnitRunner:
             f'-prj {prj_path} '
             f'-L uvm -L unisims_ver'
         )
+        # Compile Verilog/SystemVerilog files
+        self.__run_and_parse(verilog_compile_cmd, self.testbench_build_dir, fail_message="Verilog Compilation failed", success_message="Verilog Compilation successful", is_compilation=True)
         
-        result = subprocess.run(verilog_compile_cmd, shell=True, cwd=self.testbench_build_dir, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"Compilation failed:")
-            print(f"{result.stdout}")
-            sys.exit()
         
     def __elaborate(self, module_name : str, compile_glbl=False):
         
@@ -117,10 +116,7 @@ class XVUnitRunner:
             f'{compile_glbl_cmd} '
         )
                 
-        result = subprocess.run(elaborate_cmd, shell=True, cwd=self.testbench_build_dir, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"Elaboration failed: {result.stdout}")
-            sys.exit()
+        self.__run_and_parse(elaborate_cmd, self.testbench_build_dir, fail_message="Elaboration failed", success_message="Elaboration successful")
         
         
     def __simulate(self, module_name : str, runner_cfg, enable_gui=False):
@@ -148,9 +144,7 @@ class XVUnitRunner:
         
         try:
             self.sim_running.set()
-            result = subprocess.run(run_cmd, shell=True, cwd=self.testbench_build_dir, capture_output=True, text=True)
-            if result.returncode != 0:
-                print(f"Simulation failed: {result.stdout}")
+            self.__run_and_parse(run_cmd, self.testbench_build_dir, fail_message="Simulation failed", success_message="")
         finally:
             self.sim_running.clear()
             if enable_gui:
@@ -163,7 +157,7 @@ class XVUnitRunner:
         xvlog_log = os.path.join(self.testbench_build_dir, "xvlog.log")
         
         if not os.path.exists(xvlog_log):
-            print("xvlog.log doesn't exist - recompiling")
+            print(f"{xvlog_log} doesn't exist - recompiling")
             return True
         
         compile_time = os.path.getmtime(xvlog_log)
@@ -175,9 +169,9 @@ class XVUnitRunner:
                     return True
         
         
-        module_work_dir = os.path.join(self.testbench_build_dir, "xsim.dir", f'work.{module_name}')
+        module_work_dir = os.path.join(self.testbench_build_dir, "xsim.dir", f'{module_name}')
         if not os.path.exists(module_work_dir):
-            print(f"work.{module_name} doesn't exist - recompiling")
+            print(f"{module_work_dir} doesn't exist - recompiling")
             return True    
         
         compile_log_age = os.path.getmtime(xvlog_log)
@@ -224,3 +218,94 @@ class XVUnitRunner:
     def __makedir(self, path):
         if not Path.is_dir(Path(path)):
             os.makedirs(path, exist_ok=True)
+            
+            
+    def __run_and_parse(self, command, build_dir, fail_message="Failed", success_message="Successful", verbose=False, is_compilation=False):
+
+        def read_output(stream, queue, stream_name):
+            """Read from a stream and put lines in a queue"""
+            try:
+                for line in iter(stream.readline, ''):
+                    queue.put((stream_name, line))
+            except ValueError:
+                pass
+            finally:
+                stream.close()
+
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            cwd=build_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1
+        )
+
+        output_queue = Queue()
+
+        stdout_thread = threading.Thread(
+            target=read_output, 
+            args=(process.stdout, output_queue, 'stdout')
+        )
+        stderr_thread = threading.Thread(
+            target=read_output, 
+            args=(process.stderr, output_queue, 'stderr')
+        )
+
+        stdout_thread.daemon = True
+        stderr_thread.daemon = True
+        stdout_thread.start()
+        stderr_thread.start()
+
+        # Process output in real-time
+        while True:
+            try:
+                # Process available output with a small timeout
+                stream_name, line = output_queue.get(timeout=0.1)
+                
+                if line:
+                    if verbose:
+                        print(f"OUT: {line}", end='')
+                    if is_compilation:
+                        stripped = line.rstrip('\n')
+                        self.parser.parse_line(stripped)
+                    sys.stdout.flush()
+                    
+                if 'ERROR' in line:
+                    print(f'{line}', end='')
+                    
+
+            # Process any remaining output
+            except Empty:
+                if process.poll() is not None:
+                    while not output_queue.empty():
+                        try:
+                            stream_name, line = output_queue.get_nowait()
+                            if line:
+                                if verbose:
+                                    print(f"OUT: {line}", end='')
+                                if is_compilation:
+                                    stripped = line.rstrip('\n')
+                                    self.parser.parse_line(stripped)
+                        except Empty:
+                            break
+                            
+                    # Wait for threads to finish
+                    stdout_thread.join(timeout=0.1)
+                    stderr_thread.join(timeout=0.1)
+                    break
+
+            except KeyboardInterrupt:
+                print("\nInterrupted by user")
+                process.terminate()
+                break
+
+        returncode = process.wait()
+        if returncode != 0:
+            print(f"{fail_message}, return code: {returncode}")
+            sys.exit()
+        elif success_message != "":
+            if is_compilation:
+                print(f"{colorama.Fore.GREEN} [pass]")
+            print(f"{success_message}")

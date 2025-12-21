@@ -24,7 +24,7 @@
     if (__runner__.setup(runner_cfg)) begin                 \
       while (__runner__.loop) begin
 
-`define TEST_SUITE_END_X                                    \
+`define TEST_SUITE_END                                    \
       end                                                   \
     end                                                     \
   end
