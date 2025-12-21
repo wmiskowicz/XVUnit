@@ -29,7 +29,8 @@ class XVunit:
         self.refresh_thread = None
         
         self.current_testbench = None
-        self.all_tb_dict = self.parser.get_xvunit_testbenches_dict()        
+        self.all_tb_dict = {}       
+        self.source_file_paths = [] 
         self.line_ind = 0
         
         
@@ -38,6 +39,7 @@ class XVunit:
         self.current_testbench = testbench
         testbench.select_test_cases_to_run(tests_to_run)
         self.create_prj(testbench)
+        
         
         self._stop_refresh_thread.clear()
         self.refresh_thread = threading.Thread(target=self._refresh_worker)
@@ -49,32 +51,34 @@ class XVunit:
             self._stop_refresh_thread.set()
             if self.refresh_thread:
                 self.refresh_thread.join()
+                
+    def set_parameters(self, sources : dict):
+        self.source_file_paths = self.parser._match_sources(sources)
+        self.all_tb_dict = self.parser.create_testbench_dict(self.source_file_paths)
+        
         
     
-    def create_prj(self, testbench : Testbench):
+    def create_prj(self, testbench : Testbench):        
+        self.fm.create_prj(testbench.prj_path, self.source_file_paths)
         
-        search_dirs = [
-            os.path.join(PROJECT_DIR, 'rtl'),
-            os.path.join(PROJECT_DIR, 'fpga', 'rtl'),
-            os.path.join(PROJECT_DIR, 'XVUnit', 'internals', 'verilog'),
-            os.path.join(SIM_DIR, testbench.name),
-            os.path.join(SIM_DIR, 'common'),
-        ]
-        
-        source_files = self.fm.collect_hdl_files(search_dirs)
-        
-        
-        self.fm.create_prj(testbench.prj_path, source_files)
-        
-        
+    def run(self, argv):
 
-    def match_and_run(self, test_input: list, gui_arg):
         found_any_testbench = False
-        test_parts = test_input.split('.')
-        enable_gui = bool(gui_arg)
+        test_parts = argv[1].split('.')
+        enable_gui = ('-g' in argv)
+        
+        if '-h' in argv:
+            print("-h - Print help")
+            print("-l - List available tests")
+            print("-g - Run with gui")
+            sys.exit()
+        if '-l' in argv:
+            self.list()
+            sys.exit()
+        
         
         if len(test_parts) == 1:
-            for tb_name, tb_class in self.all_tb_dict.items():
+            for tb_name, tb_class in  self.all_tb_dict.items():
                 if fnmatch.fnmatch(tb_name, test_parts[0]):
                     tb_class.tb_selected = True
                     self.run_testbench(tb_class, [], run_all=True, enable_gui=enable_gui)
@@ -102,10 +106,9 @@ class XVunit:
                 print(colorama.Fore.YELLOW + f"No testbench match found!")
                 sys.exit()
         else:
-            # Defensive coding - should never happen
             print(colorama.Fore.YELLOW + f"No test found")
             sys.exit()
-                    
+  
     
     def _refresh_worker(self):
         first_iteration = True
@@ -140,20 +143,6 @@ class XVunit:
         if all_passed:
             print(f'\n{colorama.Fore.GREEN} All passed')
             
-    def match_testbench(self, testbench_name : str, tc_to_run : list) -> Testbench: 
-               
-        for tb_name, tb_class in self.all_tb_dict.items():
-            if fnmatch.fnmatch(tb_name, testbench_name):
-                matched_tb = tb_class
-        
-        tests_to_run_set = set(tc_to_run)
-        matched_test_cases = [
-            tc_key for tc_key in matched_tb.get_test_cases_dict().keys()
-            if tc_key in tests_to_run_set
-        ]
-        
-        matched_tb.select_test_cases_to_run(matched_test_cases)
-        return matched_tb
         
     def list(self):
         for tb_name, tb_class in self.all_tb_dict.items():

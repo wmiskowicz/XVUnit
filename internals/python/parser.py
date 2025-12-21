@@ -1,4 +1,4 @@
-import threading
+import fnmatch
 import time
 import colorama
 from typing import List
@@ -150,36 +150,77 @@ class Parser:
                 print(prefix, lines[line_ind+index], end='')
                 
     
-    def get_xvunit_testbenches_dict(self) -> Dict[str, Testbench]:
-        """List all testbenches in the sim directory with ."""
+    def create_testbench_dict(self, source_file_paths : list) -> Dict[str, Testbench]:
         testbench_dict = {}
         
-        for name in os.listdir(SIM_DIR):
-            test_dir = os.path.join(SIM_DIR, name)
-                
-            for file in os.listdir(test_dir):
-                if file.endswith(('.sv', '.v')):
-                    file_path = os.path.join(test_dir, file)
+        for file_path in source_file_paths:
+            name = os.path.basename(file_path.split('.')[0]) 
+            
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
                     
-                    try:
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                            
-                            # Check if it uses XVUnit framework
-                            if ('`TEST_CASE' in content and 
-                                'xvunit_defines.svh' in content):
-                                testbench = Testbench(name, file_path)
-                                
-                                if name in testbench_dict:
-                                    raise Exception(f'Found testbench duplicates: {name}')
-                                else:
-                                    testbench_dict[name] = testbench
-                                    break
-                                
-                    except (UnicodeDecodeError, IOError):
-                        continue
+                    # Check if testbench uses XVUnit framework
+                    if ('`TEST_CASE' in content and 
+                        'xvunit_defines.svh' in content):
+
+                        testbench = Testbench(name, file_path)
+                        
+                        if name in testbench_dict:
+                            raise Exception(f'Found testbench duplicates: {name}')
+                        else:
+                            testbench_dict[name] = testbench
+                        
+            except (UnicodeDecodeError, IOError):
+                continue
                         
         return testbench_dict
+    
+    def _match_sources(self, source_patterns_dict : dict):
+        """
+        List files using fnmatch with os.walk for more control.
+        """
+        source_file_list = []
+        
+        for src_list in source_patterns_dict.values():
+            
+            for pattern in src_list:
+                pattern = os.path.normpath(pattern)
+                
+                # Extract base directory from pattern
+                if '*' in pattern or '?' in pattern or '[' in pattern:
+                    # Find the last directory separator before the first wildcard
+                    dir_part = pattern
+                    while '*' in dir_part or '?' in dir_part or '[' in dir_part:
+                        dir_part = os.path.dirname(dir_part)
+                    
+                    if not dir_part or dir_part == '.':
+                        dir_part = os.getcwd()
+                        file_pattern = pattern
+                    else:
+                        file_pattern = os.path.basename(pattern)
+                    
+                    if not os.path.exists(dir_part):
+                        print(f"\nPattern: {pattern} - Directory not found: {dir_part}")
+                        continue
+                        
+                    matches_found = False
+                    
+                    for root, _, files in os.walk(dir_part):
+                        for file in files:
+                            full_path = os.path.join(root, file)
+                            # Check if file matches the pattern
+                            if fnmatch.fnmatch(full_path, pattern) or fnmatch.fnmatch(file, file_pattern):
+                                source_file_list.append(full_path)
+                                matches_found = True
+                    
+                    if not matches_found:
+                        print(f"  No files found")
+                        
+                elif not os.path.exists(pattern):
+                    print(f"\nPattern: {pattern} - File not found")
+                    
+        return source_file_list
     
     def parse_prj(self, prj_path) -> list:
         """Parse project file and return list of file paths."""

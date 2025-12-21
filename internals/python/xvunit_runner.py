@@ -36,7 +36,7 @@ class XVUnitRunner:
         self.sim_running.clear()
         module_name = Path(testbench_file).stem
         prj_path = os.path.join(SIM_DIR, module_name[:-3], f'{module_name[:-3]}.prj')
-        self.testbench_build_dir = os.path.join(BUILD_DIR, module_name[:-3])
+        self.testbench_build_dir = os.path.join(BUILD_DIR, module_name)
 
 
         self.__makedir(BUILD_DIR)
