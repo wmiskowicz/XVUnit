@@ -1,4 +1,4 @@
-import fnmatch
+import glob
 import re
 import colorama
 from typing import List
@@ -23,6 +23,7 @@ class Parser:
         
         self.previous_line = None
         self.print_stdout = False
+        self.failed_printed = False
     
     def set_current_parser_testbench(self, testbench : Testbench):
         self.current_testbench = testbench
@@ -184,45 +185,17 @@ class Parser:
         List files using fnmatch with os.walk for more control.
         """
         source_file_list = []
+    
+        for category, patterns in source_patterns_dict.items():
+            for pattern in patterns:
+                if '*' in pattern:
+                    matched_files = glob.glob(pattern, recursive=True)
+                    matched_files.sort()
+                    source_file_list.extend(matched_files)
+                else:
+                    if os.path.exists(pattern):
+                        source_file_list.append(pattern)
         
-        for src_list in source_patterns_dict.values():
-            
-            for pattern in src_list:
-                pattern = os.path.normpath(pattern)
-                
-                # Extract base directory from pattern
-                if '*' in pattern or '?' in pattern or '[' in pattern:
-                    # Find the last directory separator before the first wildcard
-                    dir_part = pattern
-                    while '*' in dir_part or '?' in dir_part or '[' in dir_part:
-                        dir_part = os.path.dirname(dir_part)
-                    
-                    if not dir_part or dir_part == '.':
-                        dir_part = os.getcwd()
-                        file_pattern = pattern
-                    else:
-                        file_pattern = os.path.basename(pattern)
-                    
-                    if not os.path.exists(dir_part):
-                        print(f"\nPattern: {pattern} - Directory not found: {dir_part}")
-                        continue
-                        
-                    matches_found = False
-                    
-                    for root, _, files in os.walk(dir_part):
-                        for file in files:
-                            full_path = os.path.join(root, file)
-                            # Check if file matches the pattern
-                            if fnmatch.fnmatch(full_path, pattern) or fnmatch.fnmatch(file, file_pattern):
-                                source_file_list.append(full_path)
-                                matches_found = True
-                    
-                    if not matches_found:
-                        print(f"  No files found")
-                        
-                elif not os.path.exists(pattern):
-                    print(f"\nPattern: {pattern} - File not found")
-                    
         return source_file_list
     
     def parse_prj(self, prj_path) -> list:
@@ -273,8 +246,10 @@ class Parser:
             print(f"Compiling {path}", end='')
             self.previous_line = line
             
-        elif line.startswith('ERROR: [VRFC 10-4982]'):
+        elif line.startswith('ERROR:') and not self.failed_printed:
             print(f'{colorama.Fore.RED} [fail]')
+            self.failed_printed = True
+            
         else:
             self.previous_line = line
             

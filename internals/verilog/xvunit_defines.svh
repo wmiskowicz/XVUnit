@@ -16,7 +16,7 @@
       if (__runner__.setup(runner_cfg)) \
         while (__runner__.loop) \
 
-`define TEST_SUITE_BEGIN_X                                  \
+`define TEST_SUITE_BEGIN                                  \
   import xvunit_pkg::*;                                     \
   initial begin : __vunit_runner_block                      \
     string runner_cfg;                                      \

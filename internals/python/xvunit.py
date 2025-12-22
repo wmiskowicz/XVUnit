@@ -59,6 +59,12 @@ class XVunit:
     def run(self, argv):
 
         found_any_testbench = False
+        if len(argv) < 2:
+            for tb_name, tb_class in  self.all_tb_dict.items():
+                tb_class.tb_selected = True
+                self.run_testbench(tb_class, [], run_all=True, enable_gui=False)
+                found_any_testbench = True
+            sys.exit()
         test_parts = argv[1].split('.')
         enable_gui = ('-g' in argv)
         self.verbose = ('-v' in argv)
@@ -76,13 +82,18 @@ class XVunit:
         
         
         if len(test_parts) == 1:
-            for tb_name, tb_class in  self.all_tb_dict.items():
+            for tb_name, tb_class in self.all_tb_dict.items():                
                 if fnmatch.fnmatch(tb_name, test_parts[0]):
                     tb_class.tb_selected = True
                     self.run_testbench(tb_class, [], run_all=True, enable_gui=enable_gui)
                     found_any_testbench = True
-                    
-            self.logger.print_summary(self.all_tb_dict)
+                    self.logger.print_summary(self.all_tb_dict)
+                else:
+                    for tc_key in tb_class.get_test_cases_dict().keys():
+                        if fnmatch.fnmatch(tc_key, test_parts[0]):
+                            found_any_testbench = True
+                            self.run_testbench(tb_class, [tc_key], run_all=True, enable_gui=enable_gui)
+                            tb_class.tb_selected
                     
             if not found_any_testbench:   
                 print(colorama.Fore.YELLOW + f"No testbench match found!")
@@ -114,7 +125,7 @@ class XVunit:
         while not self._stop_refresh_thread.is_set():
             if self.runner.is_simulation_running() and not self.parser.is_parsing_done():
                 if first_iteration:
-                    time.sleep(1) # wait for log to clear
+                    time.sleep(2) # wait for log to be created
                     first_iteration = False
                     
                 line_ind = self.parser.check_log(line_ind)
