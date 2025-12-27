@@ -95,4 +95,8 @@ class FileManager:
                 f.write('add_wave /\n') # optionally: add_wave -r /
                 
             return os.path.abspath(f.name).replace("\\", "/")
+        
+    def remove_log(self, log_path : str):
+        if os.path.exists(log_path):
+            os.remove(log_path)
 

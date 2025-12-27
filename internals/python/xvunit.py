@@ -3,7 +3,7 @@ import time
 import os, sys
 import colorama
 import fnmatch
-from typing import List
+from typing import List, Dict
 
 sys.path.append(os.path.dirname(__file__))
 
@@ -33,10 +33,11 @@ class XVunit:
         self.all_tb_dict = {}       
         self.source_file_paths = [] 
         self.line_ind = 0
+        self.current_testbench = None
         
         
     def run_testbench(self, testbench: Testbench, tests_to_run: List[str], run_all : bool = False, enable_gui=False):
-        self.parser.set_current_parser_testbench(testbench)
+        self.set_current_testbench(testbench)
         testbench.select_test_cases_to_run(tests_to_run)
         
         
@@ -58,14 +59,11 @@ class XVunit:
         
     def run(self, argv):
 
-        found_any_testbench = False
         if len(argv) < 2:
-            for tb_name, tb_class in  self.all_tb_dict.items():
-                tb_class.tb_selected = True
-                self.run_testbench(tb_class, [], run_all=True, enable_gui=False)
-                found_any_testbench = True
+            self.match_and_run_all(self.all_tb_dict)
             sys.exit()
-        test_parts = argv[1].split('.')
+            
+
         enable_gui = ('-g' in argv)
         self.verbose = ('-v' in argv)
         self.runner.verbose = self.verbose
@@ -81,6 +79,52 @@ class XVunit:
             sys.exit()
         
         
+        self.match_and_run(argv[1], enable_gui)
+    
+    
+    def _refresh_worker(self):
+        first_iteration = True
+        line_ind = 0
+        while not self._stop_refresh_thread.is_set():
+            if self.runner.is_simulation_running() and not self.parser.is_parsing_done():
+                if first_iteration:
+                    self.fm.remove_log(self.xsim_log_path)
+                    time.sleep(2) # wait for log to be created
+                    first_iteration = False
+                    
+                line_ind = self.parser.check_log(line_ind)
+                
+            time.sleep(0.5)
+            
+    def set_current_testbench(self, testbench: Testbench):
+        self.current_testbench = testbench
+        self.xsim_log_path = os.path.join(BUILD_DIR, self.current_testbench.name, "xsim.log")
+        self.parser.set_current_parser_testbench(testbench)
+        
+        
+    def list(self):
+        for tb_name, tb_class in self.all_tb_dict.items():
+            for tc_name in tb_class.get_test_cases_dict().keys():
+                print(f'{tb_name}.{tc_name}')
+          
+                
+    def match_and_run_all(self, all_tb_dict : Dict[str, Testbench]):
+        for tb_class in  all_tb_dict.values():
+            tb_class.tb_selected = True
+            self.run_testbench(tb_class, [], run_all=True, enable_gui=False)
+            found_any_testbench = True
+            
+            
+        if not found_any_testbench:   
+            print(colorama.Fore.YELLOW + f"No testbench match found!")
+        else:
+            self.logger.print_summary(all_tb_dict)
+         
+                
+    def match_and_run(self, test_arg: List[str], enable_gui: bool = False):
+        test_parts = test_arg.split('.')
+        found_any_testbench = False
+            
         if len(test_parts) == 1:
             for tb_name, tb_class in self.all_tb_dict.items():                
                 if fnmatch.fnmatch(tb_name, test_parts[0]):
@@ -92,7 +136,7 @@ class XVunit:
                     for tc_key in tb_class.get_test_cases_dict().keys():
                         if fnmatch.fnmatch(tc_key, test_parts[0]):
                             found_any_testbench = True
-                            self.run_testbench(tb_class, [tc_key], run_all=True, enable_gui=enable_gui)
+                            self.run_testbench(tb_class, [tc_key], run_all=False, enable_gui=enable_gui)
                             tb_class.tb_selected
                     
             if not found_any_testbench:   
@@ -117,24 +161,4 @@ class XVunit:
         else:
             print(colorama.Fore.YELLOW + f"No test found")
             sys.exit()
-  
-    
-    def _refresh_worker(self):
-        first_iteration = True
-        line_ind = 0
-        while not self._stop_refresh_thread.is_set():
-            if self.runner.is_simulation_running() and not self.parser.is_parsing_done():
-                if first_iteration:
-                    time.sleep(2) # wait for log to be created
-                    first_iteration = False
-                    
-                line_ind = self.parser.check_log(line_ind)
-                
-            time.sleep(0.5)
-            
-        
-    def list(self):
-        for tb_name, tb_class in self.all_tb_dict.items():
-            for tc_name in tb_class.get_test_cases_dict().keys():
-                print(f'{tb_name}.{tc_name}')
     

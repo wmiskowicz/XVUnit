@@ -37,7 +37,6 @@ class XVUnitRunner:
     def run_test(self, testbench_file, test_names : list, run_all : bool = False, force_recompile : bool = False, enable_gui = False):
         """Run a single testbench with the XVUnit framework"""
         
-       
         self.sim_running.clear()
         module_name = Path(testbench_file).stem
         prj_path = os.path.join(SIM_DIR, module_name[:-3], f'{module_name[:-3]}.prj')

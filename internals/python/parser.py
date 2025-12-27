@@ -6,6 +6,8 @@ from typing import Dict, Optional
 
 import os
 from pathlib import Path
+
+from XVunit.internals.python.logger import Logger
 from paths import *
 from test_bench import Testbench, TestCase
 
@@ -15,6 +17,7 @@ class Parser:
     def __init__(self):
                 
         colorama.init(autoreset=True)
+        self.logger = Logger()
         self.current_testbench = None
         self.finished_parsing = False
         self.testbench_build_dir = None
@@ -197,38 +200,7 @@ class Parser:
                         source_file_list.append(pattern)
         
         return source_file_list
-    
-    def parse_prj(self, prj_path) -> list:
-        """Parse project file and return list of file paths."""
-        file_paths = []
         
-        try:
-            with open(prj_path, 'r') as f:
-                for line in f:
-                    line = line.replace(' \\', "").strip()
-                    
-                    # Skip empty lines and comments
-                    if not line or line.startswith('#'):
-                        continue
-                    
-                    if line.startswith('sv work '):
-                        line = line.replace("sv work ", "").strip()
-                    elif line.startswith('verilog work'):
-                        line = line.replace("verilog work", "").strip()
-                    elif line.startswith('vhdl work'):
-                        line = line.replace("vhdl work", "").strip()
-                                            
-                    if os.path.exists(line):
-                        file_paths.append(line)
-                        
-        
-        except FileNotFoundError:
-            print(f"Error: Project file not found: {prj_path}")
-        except Exception as e:
-            print(f"Error parsing project file: {e}")
-                    
-        return file_paths
-    
     def parse_line(self, line : str):
         
         # Initial case
@@ -254,4 +226,13 @@ class Parser:
             self.previous_line = line
             
             
-            
+    def reset_parser(self):
+        self.finished_parsing = False
+        self.current_log = None
+        self.current_test = None
+        self.previous_line = None
+        self.print_stdout = False
+        self.failed_printed = False
+                    
+
+        
