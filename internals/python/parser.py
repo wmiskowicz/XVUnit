@@ -27,6 +27,7 @@ class Parser:
         self.previous_line = None
         self.print_stdout = False
         self.failed_printed = False
+        self.not_found_log_counter = 0
     
     def set_current_parser_testbench(self, testbench : Testbench):
         self.current_testbench = testbench
@@ -43,7 +44,12 @@ class Parser:
             The new file position for next call (returns last_file_position on error)
         """
         xsim_log = os.path.join(BUILD_DIR, self.current_testbench.name, "xsim.log")
-        if not os.path.exists(xsim_log):
+        
+        if self.not_found_log_counter < 5 and not os.path.exists(xsim_log):
+            self.not_found_log_counter += 1
+            return last_file_position
+        
+        if not os.path.exists(xsim_log) and self.not_found_log_counter > 5:
             print(f"Warning: {xsim_log} not found")
             return last_file_position
         

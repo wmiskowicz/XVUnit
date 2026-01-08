@@ -55,6 +55,7 @@ class XVUnitRunner:
     def compile(self, force_recompile : bool, prj_path : str, module_name : str):
         
         compile_vhdl = False
+        files_to_recompile = self._list_files_that_need_recompilation(self.source_file_paths)
         for file_path in self.source_file_paths:
             if 'vhd' in file_path.lower():
                 compile_vhdl = True
@@ -62,10 +63,15 @@ class XVUnitRunner:
             
         if force_recompile:
             self._create_prj(prj_path, self.source_file_paths)
-            self._create_prj(prj_path, self.source_file_paths)
             self._clear_prj(prj_path)
-        elif self._list_files_that_need_recompilation(self.source_file_paths) != []:
-            self._create_prj(prj_path, self._list_files_that_need_recompilation(self.source_file_paths))
+        elif files_to_recompile != []:
+            
+            files_to_recompile = self.remove_and_list_files_to_recompile(files_to_recompile) 
+            self._create_prj(prj_path, files_to_recompile)
+            
+            with open(prj_path, 'r') as f:
+                compile_vhdl = 'vhd' in f.read()
+                
             self.__compile(prj_path, compile_vhdl)
             self._clear_prj(prj_path)
             
@@ -163,19 +169,23 @@ class XVUnitRunner:
     def _list_files_that_need_recompilation(self, source_files : List[str]) -> List[str]:
         files_to_recompile = []
         work_dir = os.path.join(self.testbench_build_dir, "xsim.dir", "work")
-        work_rlx = os.path.join(self.testbench_build_dir, "xsim.dir", "word", "work.rlx")
 
         for source_file in source_files:
             if os.path.exists(source_file):
-                sdb_file = os.path.splitext(os.path.basename(source_file))[0] + '.sdb'
-                sdb_path = os.path.join(work_dir, sdb_file)
-
-                if os.path.exists(sdb_path):
+                
+                if source_file.endswith(('.v', '.sv')):
+                    compiled_file = os.path.splitext(os.path.basename(source_file))[0] + '.sdb'
+                elif source_file.endswith(('.vhd')):
+                    compiled_file = os.path.splitext(os.path.basename(source_file))[0] + '.vdb'
+                    
+                compiled_file_path = os.path.join(work_dir, compiled_file)
+                
+                if os.path.exists(compiled_file_path):
                     source_time = os.path.getmtime(source_file)
-                    compile_time = os.path.getmtime(sdb_path)
+                    compile_time = os.path.getmtime(compiled_file_path)
                     if source_time > compile_time:
                         files_to_recompile.append(source_file)
-                    
+                        os.remove(compiled_file_path)
                 else:
                     files_to_recompile.append(source_file)
             else:
@@ -279,7 +289,7 @@ class XVUnitRunner:
                         self.parser.parse_line(stripped)
                     sys.stdout.flush()
                     
-                if 'ERROR' in line:
+                if 'ERROR: ' in line:
                     print(f'{line}', end='')
                     
 
@@ -316,3 +326,75 @@ class XVUnitRunner:
             if is_compilation:
                 print(f"{colorama.Fore.GREEN} [pass]")
             print(f"{success_message}")
+            
+    
+    def clean_compiled_files(self, file_list : list):
+        work_compile_dir = os.path.join(self.testbench_build_dir, "xsim.dir", "work")
+        work_rlx = os.path.join(work_compile_dir, "work.rlx")
+        
+        if os.path.exists(work_rlx):
+            os.remove(work_rlx)
+            
+        # Remove compiled files
+        for file_to_recompile in file_list:
+            for root, dirs, compiled_files in os.walk(work_compile_dir):
+                for filename in compiled_files:
+                    
+                    stripped_filename = filename.replace('$unit_', '')
+                    src_basename = os.path.basename(file_to_recompile)
+                    
+                    if stripped_filename.startswith(src_basename.split('.')[0]):
+                        print(f"Removing compiled file: {os.path.join(root, filename)}")
+                        os.remove(os.path.join(root, filename))
+            
+    def remove_and_list_files_to_recompile(self, file_list : list):
+        """
+        This function searches work.rlx file for
+        files that depend on files that need recompilation
+        and removes them from the compiled files.
+        """
+        work_compile_dir = os.path.join(self.testbench_build_dir, "xsim.dir", "work")
+        work_rlx = os.path.join(work_compile_dir, "work.rlx")
+        testbench_path = os.path.join(self.sim_dir, "top_mouse", "top_mouse_tb.sv")
+        source_files_to_recompile = file_list.copy()
+        
+        if not os.path.exists(work_rlx):
+            return file_list
+                        
+        # When changing test classes that are not included /imported in the testbench it doesnt get recompiled,
+        # this requires manual recompilation of the top file     
+        with open(testbench_path, 'r') as f:
+            tb_content = f.read()
+            if 'new' in tb_content:
+                source_files_to_recompile.append(testbench_path)
+
+        return source_files_to_recompile
+
+
+
+#         compiled_files_to_remove = []
+        # with open(work_rlx, 'r') as f:
+        #     rlx_content = f.read()
+        #     lines = rlx_content.strip().split('\n')[4:]
+            
+        #     for file in file_list:
+        #         for line in lines:
+        #             if os.path.basename(file) in line:
+                        
+        #                 if file not in source_files_to_recompile:
+        #                     source_files_to_recompile.append(file)
+                        
+        #                 filename_with_extension = os.path.basename(line.split(',')[0])
+        #                 compiled_files_to_remove.append(filename_with_extension.split('.')[0])
+        
+        # Remove compiled files
+        # for file_to_recompile in file_list:
+        #     for root, dirs, compiled_files in os.walk(work_compile_dir):
+        #         for filename in compiled_files:
+                    
+        #             stripped_filename = filename.replace('$unit_', '')
+        #             src_basename = os.path.basename(file_to_recompile)
+                    
+        #             if stripped_filename.startswith(src_basename.split('.')[0]):
+        #                 print(f"Removing compiled file: {os.path.join(root, filename)}")
+                        # os.remove(os.path.join(root, filename))
