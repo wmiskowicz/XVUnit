@@ -4,15 +4,13 @@ import threading
 import time
 import colorama
 from pathlib import Path
-from typing import Optional, Dict, List
-import select
+from typing import List
 from queue import Queue, Empty
 
 sys.path.append(os.path.dirname(__file__))
 from path_settings import *
 from parser import Parser
 from file_manager import FileManager
-from test_bench import Testbench
 
 class XVUnitRunner:
     def __init__(self):
@@ -21,6 +19,7 @@ class XVUnitRunner:
         self.project_dir = PROJECT_DIR
         self.sim_dir    = SIM_DIR
         self.testbench_build_dir = None
+        self.current_testbench_file = None
         self.setup_cmd  = f'call "{VIVADO_SETUP}" && '
         
         self.sim_running = threading.Event()
@@ -41,6 +40,7 @@ class XVUnitRunner:
         module_name = Path(testbench_file).stem
         prj_path = os.path.join(SIM_DIR, module_name[:-3], f'{module_name[:-3]}.prj')
         self.testbench_build_dir = os.path.join(BUILD_DIR, module_name)
+        self.current_testbench_file = testbench_file
 
 
         self.__makedir(BUILD_DIR)
@@ -63,6 +63,7 @@ class XVUnitRunner:
             
         if force_recompile:
             self._create_prj(prj_path, self.source_file_paths)
+            self.__compile(prj_path, compile_vhdl)
             self._clear_prj(prj_path)
         elif files_to_recompile != []:
             
@@ -107,16 +108,14 @@ class XVUnitRunner:
                 f'{self.setup_cmd} xvhdl --incr --relax '
                 f'-prj {prj_path} '
             )
-            # Compile VHDL files
-            self.__run_and_parse(vhdl_compile_cmd, self.testbench_build_dir, fail_message="VHDL Compilation failed", success_message="VHDL Compilation successful")
-        
+            self.__run_and_parse(vhdl_compile_cmd, self.testbench_build_dir, fail_message="VHDL Compilation failed", success_message="VHDL Compilation successful", is_compilation=True)
+
         verilog_compile_cmd = (
             f'{self.setup_cmd} xvlog --incr --relax --sv '
-            f'-i {os.path.join(self.project_dir, "XVunit/internals/verilog")} '
+            f'-i {os.path.join(Path(__file__).resolve().parent.parent, "verilog")} '
             f'-prj {prj_path} '
             f'-L uvm -L unisims_ver'
         )
-        # Compile Verilog/SystemVerilog files
         self.__run_and_parse(verilog_compile_cmd, self.testbench_build_dir, fail_message="Verilog Compilation failed", success_message="Verilog Compilation successful", is_compilation=True)
         
     def __elaborate(self, module_name : str, compile_glbl=False):
@@ -316,12 +315,12 @@ class XVUnitRunner:
             except KeyboardInterrupt:
                 print("\nInterrupted by user")
                 process.terminate()
-                sys.exit()
+                sys.exit(1)
 
         returncode = process.wait()
         if returncode != 0:
             print(f"{fail_message}, return code: {returncode}")
-            sys.exit()
+            sys.exit(returncode)
         elif success_message != "":
             if is_compilation:
                 print(f"{colorama.Fore.GREEN} [pass]")
@@ -355,46 +354,17 @@ class XVUnitRunner:
         """
         work_compile_dir = os.path.join(self.testbench_build_dir, "xsim.dir", "work")
         work_rlx = os.path.join(work_compile_dir, "work.rlx")
-        testbench_path = os.path.join(self.sim_dir, "top_mouse", "top_mouse_tb.sv")
+        testbench_path = self.current_testbench_file
         source_files_to_recompile = file_list.copy()
-        
+
         if not os.path.exists(work_rlx):
             return file_list
-                        
+
         # When changing test classes that are not included /imported in the testbench it doesnt get recompiled,
-        # this requires manual recompilation of the top file     
+        # this requires manual recompilation of the top file
         with open(testbench_path, 'r') as f:
             tb_content = f.read()
             if 'new' in tb_content:
                 source_files_to_recompile.append(testbench_path)
 
         return source_files_to_recompile
-
-
-
-#         compiled_files_to_remove = []
-        # with open(work_rlx, 'r') as f:
-        #     rlx_content = f.read()
-        #     lines = rlx_content.strip().split('\n')[4:]
-            
-        #     for file in file_list:
-        #         for line in lines:
-        #             if os.path.basename(file) in line:
-                        
-        #                 if file not in source_files_to_recompile:
-        #                     source_files_to_recompile.append(file)
-                        
-        #                 filename_with_extension = os.path.basename(line.split(',')[0])
-        #                 compiled_files_to_remove.append(filename_with_extension.split('.')[0])
-        
-        # Remove compiled files
-        # for file_to_recompile in file_list:
-        #     for root, dirs, compiled_files in os.walk(work_compile_dir):
-        #         for filename in compiled_files:
-                    
-        #             stripped_filename = filename.replace('$unit_', '')
-        #             src_basename = os.path.basename(file_to_recompile)
-                    
-        #             if stripped_filename.startswith(src_basename.split('.')[0]):
-        #                 print(f"Removing compiled file: {os.path.join(root, filename)}")
-                        # os.remove(os.path.join(root, filename))

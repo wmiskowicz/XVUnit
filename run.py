@@ -9,8 +9,7 @@ def main():
     parser.add_argument("-l", '--list',action="store_true", help="List available tests")
     parser.add_argument("-t", '--test', type=str, help="Run the specified test")
     parser.add_argument("-g", '--gui', action="store_true", help="Show GUI (use with -t)")
-    parser.add_argument("-prj", action="store_true", help="Update .prj file of run test. (use with -t)")
-    
+
     args = parser.parse_args()
     xvunit = XVunit()
     

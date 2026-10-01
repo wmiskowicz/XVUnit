@@ -1,15 +1,14 @@
 import glob
 import re
 import colorama
-from typing import List
-from typing import Dict, Optional
+from typing import Dict
 
 import os
 from pathlib import Path
 
-from XVunit.internals.python.logger import Logger
+from logger import Logger
 from path_settings import *
-from test_bench import Testbench, TestCase
+from test_bench import Testbench
 
 
 class Parser:
@@ -32,7 +31,8 @@ class Parser:
     def set_current_parser_testbench(self, testbench : Testbench):
         self.current_testbench = testbench
         self.testbench_build_dir = os.path.join(BUILD_DIR, testbench.name)
-        self.finished_parsing = False
+        self.not_found_log_counter = 0
+        self.reset_parser()
          
     def check_log(self, last_file_position: int = 0) -> int:
         """Monitor log file for changes and create/update <tc_name>.log files in real-time.
@@ -213,7 +213,6 @@ class Parser:
             return
         
         # Initial case
-        # if 'ECHO is off' in line and self.previous_line is None:
         if self.previous_line is None:
             self.previous_line = line
         # Regular case

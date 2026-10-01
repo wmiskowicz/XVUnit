@@ -12,8 +12,6 @@ sys.path.append(str(repo_dir))
 sys.path.append(internals_python_dir)
 from path_settings import *
 
-
-# from XVunit.path_settings import *
 from test_bench import Testbench
 from xvunit_runner import XVUnitRunner
 from parser import Parser

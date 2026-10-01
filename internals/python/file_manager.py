@@ -4,7 +4,6 @@ from typing import List
 
 import os
 from path_settings import *
-from test_bench import Testbench
 
 
 class FileManager:
@@ -18,7 +17,6 @@ class FileManager:
         collected = []
         
         for path in paths_to_search:
-            # Fixed: check 'path' instead of 'paths_to_search'
             if not os.path.isdir(path):
                 print(f"Warning: '{path}' is not a directory, skipping")
                 continue 

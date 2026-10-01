@@ -2,7 +2,7 @@ import os
 import re
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Optional, Dict, List
+from typing import Dict, List
 
 from path_settings import BUILD_DIR
 
@@ -12,9 +12,7 @@ class TestCase:
     selected_to_run : bool = False
     passed: bool = False
     ready: bool = False
-    simulation_time: float = 0
     log_path: str = ''
-    error_msg: Optional[str] = None
     
     
     
