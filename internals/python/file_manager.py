@@ -3,7 +3,7 @@ import glob
 from typing import List
 
 import os
-from paths import *
+from path_settings import *
 from test_bench import Testbench
 
 

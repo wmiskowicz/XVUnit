@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 from XVunit.internals.python.logger import Logger
-from paths import *
+from path_settings import *
 from test_bench import Testbench, TestCase
 
 
@@ -209,8 +209,12 @@ class Parser:
         
     def parse_line(self, line : str):
         
+        if line is None:
+            return
+        
         # Initial case
-        if 'ECHO is off' in line and self.previous_line is None:
+        # if 'ECHO is off' in line and self.previous_line is None:
+        if self.previous_line is None:
             self.previous_line = line
         # Regular case
         if line.startswith('INFO: [VRFC 10-2263]'):

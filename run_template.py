@@ -1,10 +1,9 @@
 from internals.python.xvunit import XVunit
-from internals.python.run_XVUnitCommon import run_XVUnitCommon
 from internals.python.paths import PROJECT_DIR
 import os
 import sys
 
-XVUnitCommon = run_XVUnitCommon()
+xvunit = XVunit()
 
 
 
@@ -23,9 +22,9 @@ sources = {
 
 
 
-XVUnitCommon.set_parameters(
+xvunit.set_parameters(
     sources=sources
 )
 
 
-XVUnitCommon.run(argv=sys.argv)
+xvunit.run(argv=sys.argv)

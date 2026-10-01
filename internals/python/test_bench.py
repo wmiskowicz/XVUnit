@@ -4,7 +4,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, Dict, List
 
-from paths import BUILD_DIR
+from path_settings import BUILD_DIR
 
 @dataclass
 class TestCase:

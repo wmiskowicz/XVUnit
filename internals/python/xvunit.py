@@ -2,12 +2,18 @@ import threading
 import time
 import os, sys
 import colorama
+from pathlib import Path
 import fnmatch
 from typing import List, Dict
 
-sys.path.append(os.path.dirname(__file__))
+repo_dir = Path(os.path.dirname(__file__)).parent.parent.resolve()
+internals_python_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(str(repo_dir))
+sys.path.append(internals_python_dir)
+from path_settings import *
 
-from paths import *
+
+# from XVunit.path_settings import *
 from test_bench import Testbench
 from xvunit_runner import XVUnitRunner
 from parser import Parser
@@ -109,6 +115,8 @@ class XVunit:
           
                 
     def match_and_run_all(self, all_tb_dict : Dict[str, Testbench]):
+        found_any_testbench = False
+        
         for tb_class in  all_tb_dict.values():
             tb_class.tb_selected = True
             self.run_testbench(tb_class, [], run_all=True, enable_gui=False)

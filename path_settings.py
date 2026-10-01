@@ -5,7 +5,7 @@ from pathlib import Path
 # Path setup
 # -------------------------------------------------------------------------
 THIS_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_DIR     = Path(THIS_SCRIPT_DIR).parent.parent.parent.resolve()
+PROJECT_DIR     = Path(THIS_SCRIPT_DIR).parent.resolve()
 SIM_DIR         = os.path.join(PROJECT_DIR, "sim")
 BUILD_DIR       = os.path.join(SIM_DIR, "xvunit_out")
 

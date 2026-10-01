@@ -9,7 +9,7 @@ import select
 from queue import Queue, Empty
 
 sys.path.append(os.path.dirname(__file__))
-from paths import *
+from path_settings import *
 from parser import Parser
 from file_manager import FileManager
 from test_bench import Testbench
