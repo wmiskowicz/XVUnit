@@ -3,7 +3,6 @@ import glob
 from typing import List
 
 import os
-from path_settings import *
 
 
 class FileManager:
@@ -79,8 +78,8 @@ class FileManager:
         other_files = [f for f in files if "_pkg" not in f and "_if" not in f]
         return sorted(pkg_if_files) + sorted(other_files)
     
-    def get_wcfg_file(self, module_name) -> str:
-        wcfg_files = glob.glob(os.path.join(SIM_DIR, module_name[:-3], "*.wcfg"))
+    def get_wcfg_file(self, testbench_dir : str) -> str:
+        wcfg_files = glob.glob(os.path.join(testbench_dir, "*.wcfg"))
         return wcfg_files[0] if wcfg_files else None
     
     def create_temp_tcl(self, is_wcfg : bool) -> str:
@@ -94,7 +93,12 @@ class FileManager:
                 
             return os.path.abspath(f.name).replace("\\", "/")
         
-    def remove_log(self, log_path : str):
-        if os.path.exists(log_path):
+    def remove_log(self, log_path : str) -> bool:
+        if not os.path.exists(log_path):
+            return True
+        try:
             os.remove(log_path)
+            return True
+        except PermissionError:
+            return False
 

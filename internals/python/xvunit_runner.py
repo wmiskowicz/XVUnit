@@ -11,15 +11,14 @@ sys.path.append(os.path.dirname(__file__))
 from path_settings import *
 from parser import Parser
 from file_manager import FileManager
+from test_bench import Testbench
 
 class XVUnitRunner:
     def __init__(self):
         self.parser = Parser()
         self.fm = FileManager()
-        self.project_dir = PROJECT_DIR
-        self.sim_dir    = SIM_DIR
         self.testbench_build_dir = None
-        self.current_testbench_file = None
+        self.current_testbench = None
         self.setup_cmd  = f'call "{VIVADO_SETUP}" && '
         
         self.sim_running = threading.Event()
@@ -33,14 +32,14 @@ class XVUnitRunner:
         return self.sim_running.is_set()
 
     
-    def run_test(self, testbench_file, test_names : list, run_all : bool = False, force_recompile : bool = False, enable_gui = False):
+    def run_test(self, testbench : Testbench, test_names : list, run_all : bool = False, force_recompile : bool = False, enable_gui = False):
         """Run a single testbench with the XVUnit framework"""
-        
+
         self.sim_running.clear()
-        module_name = Path(testbench_file).stem
-        prj_path = os.path.join(SIM_DIR, module_name[:-3], f'{module_name[:-3]}.prj')
+        module_name = testbench.name
+        prj_path = testbench.prj_path
         self.testbench_build_dir = os.path.join(BUILD_DIR, module_name)
-        self.current_testbench_file = testbench_file
+        self.current_testbench = testbench
 
 
         self.__makedir(BUILD_DIR)
@@ -138,7 +137,8 @@ class XVUnitRunner:
         if enable_gui:
             
             # Search for wave configuration file
-            wcfg_file = self.fm.get_wcfg_file(module_name)
+            testbench_dir = os.path.dirname(self.current_testbench.file_path)
+            wcfg_file = self.fm.get_wcfg_file(testbench_dir)
             temp_tcl_file = self.fm.create_temp_tcl(bool(wcfg_file))
                 
             
@@ -354,7 +354,7 @@ class XVUnitRunner:
         """
         work_compile_dir = os.path.join(self.testbench_build_dir, "xsim.dir", "work")
         work_rlx = os.path.join(work_compile_dir, "work.rlx")
-        testbench_path = self.current_testbench_file
+        testbench_path = self.current_testbench.file_path
         source_files_to_recompile = file_list.copy()
 
         if not os.path.exists(work_rlx):

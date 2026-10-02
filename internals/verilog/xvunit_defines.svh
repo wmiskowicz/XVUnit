@@ -8,13 +8,6 @@
    initial begin \
       __runner__.watchdog((runtime) / 1ns); \
    end
-   
-`define TEST_SUITE_X \
-    import xvunit_pkg::*; \
-    string runner_cfg; \
-    initial \
-      if (__runner__.setup(runner_cfg)) \
-        while (__runner__.loop) \
 
 `define TEST_SUITE_BEGIN                                  \
   import xvunit_pkg::*;                                     \

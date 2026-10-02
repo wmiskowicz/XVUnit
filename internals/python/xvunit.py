@@ -50,7 +50,7 @@ class XVunit:
         self.refresh_thread.start()
         
         try:
-            self.runner.run_test(testbench.file_path, testbench.get_selected_test_cases_names(), run_all=run_all, enable_gui=enable_gui)
+            self.runner.run_test(testbench, testbench.get_selected_test_cases_names(), run_all=run_all, enable_gui=enable_gui)
         finally:
             self._stop_refresh_thread.set()
             if self.refresh_thread:
@@ -92,7 +92,12 @@ class XVunit:
         while not self._stop_refresh_thread.is_set():
             if self.runner.is_simulation_running() and not self.parser.is_parsing_done():
                 if first_iteration:
-                    self.fm.remove_log(self.xsim_log_path)
+                    removed = self.fm.remove_log(self.xsim_log_path)
+                    if not removed and os.path.exists(self.xsim_log_path):
+                        # xsim already has the old log open (still running from
+                        # a previous invocation) - skip past its stale content
+                        # instead of re-reading it as if it were this run's.
+                        line_ind = os.path.getsize(self.xsim_log_path)
                     time.sleep(2) # wait for log to be created
                     first_iteration = False
                     
