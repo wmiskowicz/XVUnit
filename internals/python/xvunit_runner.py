@@ -24,6 +24,7 @@ class XVUnitRunner:
         self.sim_running = threading.Event()
         self.verbose = False
         self.source_file_paths = []
+        self.vhdl_recompiled = False
         colorama.init(autoreset=True)
         
         
@@ -53,6 +54,7 @@ class XVUnitRunner:
 
     def compile(self, force_recompile : bool, prj_path : str, module_name : str):
         
+        self.vhdl_recompiled = False
         compile_vhdl = False
         files_to_recompile = self._list_files_that_need_recompilation(self.source_file_paths)
         for file_path in self.source_file_paths:
@@ -64,16 +66,17 @@ class XVUnitRunner:
             self._create_prj(prj_path, self.source_file_paths)
             self.__compile(prj_path, compile_vhdl)
             self._clear_prj(prj_path)
+            self.vhdl_recompiled = compile_vhdl
         elif files_to_recompile != []:
             
             files_to_recompile = self.remove_and_list_files_to_recompile(files_to_recompile) 
             self._create_prj(prj_path, files_to_recompile)
             
-            with open(prj_path, 'r') as f:
-                compile_vhdl = 'vhd' in f.read()
+            compile_vhdl = any(f.lower().endswith('.vhd') for f in files_to_recompile)
                 
             self.__compile(prj_path, compile_vhdl)
             self._clear_prj(prj_path)
+            self.vhdl_recompiled = compile_vhdl
             
             
     def elaborate(self, force_recompile : bool, module_name : str):
@@ -84,7 +87,11 @@ class XVUnitRunner:
                 compile_glbl = True
                 break
             
-        if force_recompile or self.__needs_reelaboration():
+        if force_recompile or self.vhdl_recompiled:
+            # Full (non-incremental) elaboration: xelab --incr can miss a
+            # re-analyzed VHDL unit and silently reuse the old snapshot.
+            self.__elaborate(module_name, compile_glbl, incremental=False)
+        elif self.__needs_reelaboration():
             self.__elaborate(module_name, compile_glbl)
 
             
@@ -117,13 +124,14 @@ class XVUnitRunner:
         )
         self.__run_and_parse(verilog_compile_cmd, self.testbench_build_dir, fail_message="Verilog Compilation failed", success_message="Verilog Compilation successful", is_compilation=True)
         
-    def __elaborate(self, module_name : str, compile_glbl=False):
+    def __elaborate(self, module_name : str, compile_glbl=False, incremental=True):
         
         compile_glbl_cmd = "work.glbl " if compile_glbl else ""
+        incr_flag = "--incr " if incremental else ""
 
         
         elaborate_cmd = (
-            f'{self.setup_cmd} xelab --incr --relax --debug typical '
+            f'{self.setup_cmd} xelab {incr_flag}--relax --debug typical '
             f'work.{module_name} '
             f'-snapshot {module_name} '
             f'-L uvm -L unisims_ver '
@@ -203,12 +211,12 @@ class XVUnitRunner:
         # Get elaboration time from xelab.log
         elab_time = os.path.getmtime(xelab_log)
         
-        # Check if compilation is newer than elaboration
-        xvlog_log = os.path.join(self.testbench_build_dir, "xvlog.log")
-        if os.path.exists(xvlog_log):
-            compile_log_age = os.path.getmtime(xvlog_log)
-            if compile_log_age > elab_time:
-                return True
+        # Check if compilation (Verilog or VHDL) is newer than elaboration
+        for compile_log in ("xvlog.log", "xvhdl.log"):
+            compile_log_path = os.path.join(self.testbench_build_dir, compile_log)
+            if os.path.exists(compile_log_path):
+                if os.path.getmtime(compile_log_path) > elab_time:
+                    return True
         
         return False
     

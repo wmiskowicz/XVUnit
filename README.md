@@ -107,7 +107,6 @@ Edit these to match your Vivado install location.
 | Flag | Description |
 |------|-------------|
 | `-l`, `--list` | List all discovered testbenches and test cases |
-| `-t`, `--test` | Run a specific testbench or `testbench.test_case` (supports `fnmatch` wildcards) |
 | `-g`, `--gui`  | Open the simulation in the `xsim` GUI (use with `-t`) |
 | `-v`           | Verbose: stream raw `xsim`/`xvlog`/`xelab` output |
 | `-h`           | Print help |
