@@ -19,7 +19,7 @@ class XVUnitRunner:
         self.fm = FileManager()
         self.testbench_build_dir = None
         self.current_testbench = None
-        self.setup_cmd  = f'call "{VIVADO_SETUP}" && '
+        self.setup_cmd, self.env = self.__vivado_environment()
         
         self.sim_running = threading.Event()
         self.verbose = False
@@ -28,6 +28,29 @@ class XVUnitRunner:
         colorama.init(autoreset=True)
         
         
+    @staticmethod
+    def __vivado_environment():
+        """Return (command prefix, environment) used to launch Vivado tools.
+
+        Vivado's bin/ is prepended to PATH on every platform. On Windows,
+        settings64.bat is additionally called when present, matching what
+        the Vivado shortcut does.
+        """
+        if VIVADO_ROOT is None or not os.path.isdir(VIVADO_DIR):
+            print(f"{colorama.Fore.RED}Vivado not found. Set XVUNIT_VIVADO_PATH to your "
+                  f"Vivado install folder (e.g. C:/Xilinx/Vivado/2023.1 or "
+                  f"/tools/Xilinx/Vivado/2023.1), or put xvlog on PATH.")
+            sys.exit(1)
+
+        env = os.environ.copy()
+        env["PATH"] = VIVADO_DIR + os.pathsep + env.get("PATH", "")
+
+        setup_cmd = ""
+        settings_bat = os.path.join(VIVADO_ROOT, "settings64.bat")
+        if IS_WINDOWS and os.path.isfile(settings_bat):
+            setup_cmd = f'call "{settings_bat}" && '
+        return setup_cmd, env
+
     def is_simulation_running(self):
         """Check if simulation is currently running."""
         return self.sim_running.is_set()
@@ -112,14 +135,14 @@ class XVUnitRunner:
         if compile_vhdl:
             vhdl_compile_cmd = (
                 f'{self.setup_cmd} xvhdl --incr --relax '
-                f'-prj {prj_path} '
+                f'-prj "{prj_path}" '
             )
             self.__run_and_parse(vhdl_compile_cmd, self.testbench_build_dir, fail_message="VHDL Compilation failed", success_message="VHDL Compilation successful", is_compilation=True)
 
         verilog_compile_cmd = (
             f'{self.setup_cmd} xvlog --incr --relax --sv '
-            f'-i {os.path.join(Path(__file__).resolve().parent.parent, "verilog")} '
-            f'-prj {prj_path} '
+            f'-i "{os.path.join(Path(__file__).resolve().parent.parent, "verilog")}" '
+            f'-prj "{prj_path}" '
             f'-L uvm -L unisims_ver'
         )
         self.__run_and_parse(verilog_compile_cmd, self.testbench_build_dir, fail_message="Verilog Compilation failed", success_message="Verilog Compilation successful", is_compilation=True)
@@ -260,6 +283,7 @@ class XVUnitRunner:
             command,
             shell=True,
             cwd=build_dir,
+            env=self.env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

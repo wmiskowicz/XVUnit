@@ -94,18 +94,13 @@ ehthumbs.db
 # DVT specific files
 *_dict*
 *build.config*
-*auto*
 default.ls
 
 # Project specific
 .env
 results
-images
-*build*
 *.vscode
-*.png
-*.jpg
-*vunit_out*
+xvunit_out/
 *.cxl*
 .settings/
 .project

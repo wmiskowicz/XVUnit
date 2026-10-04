@@ -1,69 +1,105 @@
 # XVunit
 
-XVunit is a small test runner that brings [VUnit](https://vunit.github.io/)-style
-unit testing to **AMD/Xilinx Vivado's `xsim` simulator**. It drives `xvlog` /
-`xvhdl` / `xelab` / `xsim` directly from the command line with limited support of Vivado GUI (-g),
-no manually maintained `.prj` files — and gives you VUnit's familiar
-`` `TEST_CASE ``, `` `CHECK_EQUAL `` style macros for SystemVerilog
-testbenches, with per-test-case pass/fail reporting and incremental
-recompilation.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+
+**Run VUnit-style SystemVerilog testbenches on AMD/Xilinx Vivado XSim.**
+
+
+![XVunit demo](docs/xvunit_demo.gif)
+
+## Why it exists
+
+Necessity is the mother of invention as thay say. [VUnit](https://vunit.github.io/) is a great unit-testing framework, but it does not support the Vivado simulator as of today ([VUnit#209](https://github.com/VUnit/vunit/issues/209)).
+If you need some lightweight unit tests for your project like me - this is the right repository for you.  
+
+## About 
+
+XVunit drives `xvlog`, `xvhdl`, `xelab` and `xsim` directly from the command
+line. It gives you VUnit's familiar `` `TEST_CASE `` and `` `CHECK_EQUAL ``
+macros, per-test-case pass/fail reporting, incremental recompilation and
+optional XSim GUI runs.
+
+> XVunit is an independent project and is **not affiliated with or endorsed
+> by the [VUnit](https://vunit.github.io/) project**. It reuses VUnit's
+> SystemVerilog test runner under the MPL-2.0 (see [License](#license)).
 
 ## Requirements
 
-- AMD Vivado install with the simulator tools (`xvlog`, `xvhdl`,
-  `xelab`, `xsim`) on the machine.
-- Python 3.8+
-- The `colorama` package (`pip install colorama`)
+- Python 3.10 or newer.
+- `colorama`: `pip install -r requirements.txt`
+- AMD Vivado with its simulator tools (`xvlog`, `xvhdl`, `xelab`, `xsim`).
+  Tested with Vivado 2023.1 on Windows 11. Linux is supported by the code
+  but has not been tested yet; reports are welcome.
 
-XVunit currently launches Vivado's tools via `VIVADO_SETUP` (a Windows
-`settings64.bat`), see [Configuration](#configuration) below.
+XVunit finds Vivado in this order:
 
-## Installation
+1. The `XVUNIT_VIVADO_PATH` environment variable, pointing at the install
+   folder, e.g. `C:\Xilinx\Vivado\2023.1` or `/tools/Xilinx/Vivado/2023.1`.
+2. `xvlog` on your `PATH`, e.g. after sourcing Vivado's `settings64.sh`.
+3. The newest version in the default install locations
+   (`C:\Xilinx\Vivado\*`, `/tools/Xilinx/Vivado/*`, `/opt/Xilinx/Vivado/*`).
 
-Add XVunit as a git submodule in the root of your HDL project:
+## Try the example
+
+```sh
+git clone https://github.com/wmiskowicz/XVunit.git
+cd XVunit
+pip install -r requirements.txt
+python examples/counter/run.py
+```
+
+This compiles a small [counter](examples/counter/counter.sv) and runs the four
+test cases in its [testbench](examples/counter/counter_tb.sv).
+
+## Using it in your project
+
+Add XVunit as a git submodule in the root of your HDL project. The folder
+must be named `XVunit`, because the run scripts import it under that name.
 
 ```sh
 git submodule add https://github.com/wmiskowicz/XVunit.git XVunit
 ```
 
-The folder **must** be named `XVunit` (matching case) — the tool resolves
-its own bundled SystemVerilog sources relative to this folder name, and
-several path checks are case-sensitive on Linux/macOS.
+Then copy [`run_template.py`](run_template.py) to your project root, rename it
+(e.g. `run_my_module.py`) and point `sources` at your files. Glob patterns are
+expanded. Always include XVunit's own runtime package:
 
-## Quick start
+```python
+sources = {
+    "rtl": [
+        os.path.join(PROJECT_DIR, "rtl", "my_module", "*.sv"),
+    ],
+    "sim": [
+        os.path.join(PROJECT_DIR, "sim", "my_module", "*.sv"),
+        os.path.join(PROJECT_DIR, "XVunit", "internals", "verilog", "*.sv"),
+    ],
+}
+```
 
-1. Adjust your Vivado path in [`path_settings.py`](path_settings.py)
-2. Copy [`run_template.py`](run_template.py) into your project's root
-   directory and rename it, e.g. `run_my_module.py`.
-3. Point the `sources` dictionary at your own RTL and testbench files.
-   Glob patterns (`*`) are expanded; plain paths are used as-is. Always
-   include XVunit's own runtime package so your testbenches can use the
-   `` `TEST_CASE ``/`` `CHECK_EQUAL `` macros:
+### Project layout and conventions
 
-   ```python
-   sources = {
-       "rtl": [
-           os.path.join(PROJECT_DIR, "rtl", "my_module", "*.sv"),
-       ],
-       "sim": [
-           os.path.join(PROJECT_DIR, "sim", "my_module", "*.sv"),
-           os.path.join(PROJECT_DIR, "XVunit", "internals", "verilog", "*.sv"),
-       ],
-   }
-   ```
-4. Run it:
+Directory names for your RTL and testbenches are up to you. What matters:
 
-   ```sh
-   python run_my_module.py        # run every discovered testbench
-   python run_my_module.py -l     # list discovered testbenches/test cases
-   python run_my_module.py my_module_tb           # run one testbench
-   python run_my_module.py my_module_tb.TC000      # run one test case
-   python run_my_module.py my_module_tb.TC000 -g   # open in the xsim GUI
-   python run_my_module.py my_module_tb -v         # verbose xsim output
-   ```
+```
+my_project/
+├── XVunit/                 # this repository, as a submodule
+├── run_my_module.py        # copied from XVunit/run_template.py
+├── xvunit_out/             # build output and logs (can be set as env variable)
+├── rtl/...                 # sources
+└── sim/my_module/
+    ├── my_module_tb.sv     # module name must equal the file name
+    └── my_module_tb.wcfg   # optional waveform layout for -g
+```
 
-A testbench is only picked up if it both contains `` `TEST_CASE `` and
-includes `xvunit_defines.svh`.
+- **A testbench is discovered** only if its file contains `` `TEST_CASE ``
+  and includes `xvunit_defines.svh`.
+- **The testbench module name must match its file name**, e.g. module
+  `my_module_tb` lives in `my_module_tb.sv`.
+- **All files in `sources` are compiled together** into one library, `work`.
+  Files whose names contain `_pkg` or `_if` are compiled first.
+- **Build output** goes to `<project>/xvunit_out`. Set `XVUNIT_BUILD_DIR`
+  to change it.
 
 ## Writing a testbench
 
@@ -71,87 +107,100 @@ includes `xvunit_defines.svh`.
 `include "xvunit_defines.svh"
 
 module my_module_tb;
+  // ... clock, DUT instance ...
+
   `TEST_SUITE_BEGIN
 
-    `TEST_CASE("resets_to_zero")
-      // ... drive DUT, then:
-      `CHECK_EQUAL(dut.counter, 0);
+    `TEST_CASE_SETUP begin
+      // runs before every test case, e.g. reset the DUT
+    end
 
-    `TEST_CASE("counts_up")
-      `CHECK_EQUAL(dut.counter, 1);
+    `TEST_CASE("resets_to_zero") begin
+      `CHECK_EQUAL(dut.counter, 0);
+    end
+
+    `TEST_CASE("counts_up") begin
+      repeat (3) @(negedge clk);
+      `CHECK_EQUAL(dut.counter, 3, "optional message");
+    end
 
   `TEST_SUITE_END
+
+  `WATCHDOG(1ms);  // fail if the suite hangs
 endmodule
 ```
 
-See `internals/verilog/xvunit_defines.svh` for the full macro set
-(`CHECK_EQUAL`, `CHECK_NOT_EQUAL`, `CHECK_GREATER`, `CHECK_LESS`,
-`CHECK_EQUAL_VARIANCE`, `WATCHDOG`, setup/cleanup hooks, ...).
+Wrap each test case body in `begin ... end`. The macros expand to an `if`, so
+without it only the first statement belongs to the test case. Place
+`WATCHDOG` after `TEST_SUITE_END` See [`example testbench`](examples/counter_tb.sv).
 
-## Configuration
+Available macros: `CHECK_EQUAL`, `CHECK_NOT_EQUAL`, `CHECK_GREATER`,
+`CHECK_LESS`, `CHECK_EQUAL_VARIANCE`, `WATCHDOG`, `TEST_SUITE_SETUP`,
+`TEST_SUITE_CLEANUP`, `TEST_CASE_SETUP` and `TEST_CASE_CLEANUP`. See
+[`xvunit_defines.svh`](internals/verilog/xvunit_defines.svh).
 
-All machine-specific paths live in [`path_settings.py`](path_settings.py):
+## Command line
 
-| Variable       | Meaning                                                   |
-|----------------|------------------------------------------------------------|
-| `PROJECT_DIR`  | Root of the host project (one level above the `XVunit/` folder) |
-| `BUILD_DIR`    | `<PROJECT_DIR>/xvunit_out` — simulation build output and logs |
-| `VIVADO_DIR`   | Vivado's `bin` directory |
-| `VIVADO_SETUP` | Path to Vivado's `settings64.bat` (sourced before every tool invocation) |
-
-Edit these to match your Vivado install location.
-
-
-## CLI reference
+```sh
+python run_my_module.py                            # run every testbench
+python run_my_module.py -l                         # list testbenches and test cases
+python run_my_module.py my_module_tb               # run one testbench
+python run_my_module.py my_module_tb.counts_up     # run one test case
+python run_my_module.py "my_module_tb.count*"      # glob patterns work too
+python run_my_module.py my_module_tb.counts_up -g  # open in the XSim GUI
+python run_my_module.py my_module_tb -v            # verbose tool output
+```
 
 | Flag | Description |
 |------|-------------|
-| `-l`, `--list` | List all discovered testbenches and test cases |
-| `-g`, `--gui`  | Open the simulation in the `xsim` GUI (use with `-t`) |
-| `-v`           | Verbose: stream raw `xsim`/`xvlog`/`xelab` output |
-| `-h`           | Print help |
-| *(no flags)*   | Run every discovered testbench |
+| `-l` | List all discovered testbenches and test cases |
+| `-g` | Open the simulation in the XSim GUI. Uses a `.wcfg` next to the testbench if present |
+| `-v` | Stream raw `xvlog`/`xelab`/`xsim` output |
+| `-h` | Print help |
 
-## Project layout
+## Limitations
+
+- **Testbenches must be SystemVerilog.** RTL may be SystemVerilog, Verilog
+  or VHDL, but VHDL testbenches using VUnit's VHDL library are not supported.
+- **Only a subset of VUnit is ported**: the test runner and the check macros
+  above. There is no VUnit Python API (`add_library`, configurations,
+  generic/parameter sweeps), no parallel test execution, no JUnit/xUnit
+  report and no logging or verification component libraries.
+- **The process exit code does not reflect test results.** It reports
+  whether compilation, elaboration and simulation launched successfully.
+  Check the printed summary or the per-test-case `.log` files under
+  `xvunit_out/`. This matters for CI.
+- **All test cases of a testbench run in one simulation**, so state can
+  leak between them. Use `TEST_CASE_SETUP` to reset the DUT.
+
+## Repository layout
 
 ```
 XVunit/
-├── path_settings.py           # Vivado install paths, build dir (edit per machine)
-├── run_template.py            # copy this out to your project root
-├── internals/
-│   ├── python/                 # the runner itself
-│   │   ├── xvunit.py            # public entry point (XVunit class)
-│   │   ├── parser.py            # xsim.log tailing, pass/fail + progress reporting
-│   │   ├── test_bench.py        # testbench/test-case discovery
-│   │   ├── file_manager.py      # .prj file generation
-│   │   └── logger.py            # summary printing
-│   └── verilog/                 # SystemVerilog test macros (from VUnit, see License)
-│       ├── xvunit_defines.svh
-│       └── xvunit_pkg.sv
-└── README.md
+├── path_settings.py          # Vivado detection and build directory
+├── run_template.py           # copy this to your project root
+├── requirements.txt
+├── examples/counter/         # runnable example
+└── internals/
+    ├── python/               # the runner
+    │   ├── xvunit.py         # entry point (XVunit class) and CLI
+    │   ├── xvunit_runner.py  # compile / elaborate / simulate
+    │   ├── parser.py         # xsim.log tailing, pass/fail reporting
+    │   ├── test_bench.py     # testbench and test case discovery
+    │   ├── file_manager.py   # .prj file generation
+    │   └── logger.py         # summary printing
+    └── verilog/              # SystemVerilog runtime (from VUnit, MPL-2.0)
+        ├── xvunit_defines.svh
+        └── xvunit_pkg.sv
 ```
-
-## Known limitations
-
-- Vivado tool invocation currently assumes a Windows `settings64.bat`
-  (`VIVADO_SETUP`). Linux users will need to adapt `XVUnitRunner.setup_cmd`
-  in `internals/python/xvunit_runner.py` to source Vivado's `settings64.sh`
-  instead.
-- The Python process's exit code reflects whether compilation/elaboration/
-  simulation *launched* successfully, not whether every test case inside
-  passed — check the printed summary (or the per-test-case `.log` files
-  under `sim/xvunit_out/`) for actual pass/fail status.
 
 ## License
 
-XVunit's own code (everything under `internals/python/`, `path_settings.py`,
-`run_template.py`) is licensed under the [MIT License](LICENSE).
+XVunit's own code is licensed under the [MIT License](LICENSE). That covers
+everything except the two files below.
 
 `internals/verilog/xvunit_pkg.sv` and `internals/verilog/xvunit_defines.svh`
-are adapted from the [VUnit](https://github.com/VUnit/vunit) project
-(Copyright © Lars Asplund) and remain licensed under the **Mozilla Public
-License 2.0**, per their file headers. See
-[`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) for details. All
-credit for the underlying test-runner design and macro set goes to the
-VUnit project — XVunit only ports the pieces needed to drive Vivado's
-`xsim` directly.
+are adapted from [VUnit](https://github.com/VUnit/vunit), Copyright © Lars
+Asplund, and remain licensed under the **Mozilla Public License 2.0** per
+their file headers. See [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
+All credit for the test runner design and macro set goes to the VUnit project.
